@@ -1,0 +1,5 @@
+- [User profile](user_profile.md) — experienced engineer, PMO mindset, prefers pragmatic opinionated suggestions
+- [Project goals](project_goals.md) — 3 goals (persistent context, constrained state, demo platform), dogfooding with itself
+- [Design decisions](project_design_decisions.md) — Goal/Requirement/Step model, no status on Requirements, Capability layer deferred, LLM as cognitive assistant
+- [Two operating modes](project_two_modes.md) — context provider (supports primary tool) vs planning partner (spec is the deliverable)
+- [Planning sessions](feedback_planning_sessions.md) — don't rush to code; design conversations are high-leverage output
