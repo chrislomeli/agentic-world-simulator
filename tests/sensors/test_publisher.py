@@ -4,10 +4,10 @@ import asyncio
 
 import pytest
 
-from ogar.sensors.base import SensorBase, FailureMode
-from ogar.sensors.publisher import SensorPublisher
-from ogar.transport.queue import SensorEventQueue
-from ogar.transport.schemas import SensorEvent
+from sensors.base import SensorBase, FailureMode
+from sensors import SensorPublisher
+from transport import SensorEventQueue
+from transport import SensorEvent
 
 
 class _FakeSensor(SensorBase):

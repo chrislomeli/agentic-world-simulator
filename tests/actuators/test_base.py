@@ -2,7 +2,7 @@
 
 import pytest
 
-from ogar.actuators.base import ActuatorCommand, ActuatorResult, ActuatorBase
+from actuators.base import ActuatorCommand, ActuatorResult, ActuatorBase
 
 
 # ── ActuatorCommand ──────────────────────────────────────────────────────────

@@ -3,7 +3,7 @@
 import math
 import random
 
-from ogar.world.weather import WeatherState
+from world import WeatherState
 
 
 class TestWeatherDefaults:

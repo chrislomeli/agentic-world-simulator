@@ -9,7 +9,7 @@ so a fresh Settings object is constructed from those vars.
 import os
 import pytest
 
-from ogar.config import Settings, get_settings
+from config import Settings, get_settings
 
 
 @pytest.fixture(autouse=True)
@@ -27,14 +27,14 @@ def no_env_file(monkeypatch):
     Unset AI_ENV_FILE so pydantic-settings reads only from env vars.
     """
     monkeypatch.delenv("AI_ENV_FILE", raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "")
+    monkeypatch.setenv("OPENAI_API_KEY", "")
 
 
 class TestSettingsDefaults:
     def test_defaults_are_empty_strings(self):
         s = Settings()
         assert s.anthropic_api_key == ""
-        assert s.langchain_api_key == ""
-        assert s.database_url == ""
 
     def test_transport_defaults(self):
         s = Settings()

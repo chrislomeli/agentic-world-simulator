@@ -3,9 +3,9 @@
 import random
 import pytest
 
-from ogar.domains.wildfire.cell_state import FireCellState, FireState, TerrainType
-from ogar.domains.wildfire.scenarios import create_basic_wildfire
-from ogar.world.generic_engine import GenericWorldEngine, GenericGroundTruthSnapshot
+from domains.wildfire import FireState, TerrainType
+from domains.wildfire import create_basic_wildfire
+from world import GenericWorldEngine
 
 
 @pytest.fixture(autouse=True)

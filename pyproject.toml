@@ -33,6 +33,8 @@ dependencies = [
 llm = [
     "langchain-openai>=0.2",
 ]
+
+[dependency-groups]
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.23",
@@ -45,12 +47,6 @@ Homepage = "https://github.com/chrislomeli/world-simulator"
 
 [tool.setuptools.packages.find]
 where = ["src"]
-
-[tool.setuptools.package-data]
-"ogar" = ["py.typed"]
-
-[tool.uv]
-default-extras = ["dev"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

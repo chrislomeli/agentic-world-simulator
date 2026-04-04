@@ -2,8 +2,8 @@
 
 import pytest
 
-from ogar.world.cell_state import CellState
-from ogar.world.generic_grid import GenericTerrainGrid
+from world.cell_state import CellState
+from world.generic_grid import GenericTerrainGrid
 
 
 # ── Test cell state ──────────────────────────────────────────────────────────

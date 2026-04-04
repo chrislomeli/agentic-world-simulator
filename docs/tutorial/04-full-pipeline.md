@@ -76,7 +76,7 @@ Now we'll wire everything together: **World Engine → Sensors → Queue → Age
 
 ```python
 import random
-from ogar.domains.wildfire.scenarios import create_basic_wildfire
+from domains.wildfire import create_basic_wildfire
 
 # Set seed for reproducibility
 random.seed(42)
@@ -101,56 +101,56 @@ Weather: 38°C, 12% humidity
 ### Step 2: Create Sensors
 
 ```python
-from ogar.domains.wildfire.sensors import (
-    TemperatureSensor,
-    SmokeSensor,
-    WindSensor,
-    HumiditySensor,
+from domains.wildfire.sensors import (
+   TemperatureSensor,
+   SmokeSensor,
+   WindSensor,
+   HumiditySensor,
 )
 
 CLUSTER_ID = "cluster-north"
 
 sensors = [
-    # Temperature sensors at different grid positions
-    TemperatureSensor(
-        source_id="temp-A1",
-        cluster_id=CLUSTER_ID,
-        engine=engine,
-        grid_row=3,
-        grid_col=3,
-        noise_std=0.5,
-    ),
-    TemperatureSensor(
-        source_id="temp-B2",
-        cluster_id=CLUSTER_ID,
-        engine=engine,
-        grid_row=7,
-        grid_col=2,
-        noise_std=0.5,
-    ),
-    
-    # Smoke sensor near expected fire path
-    SmokeSensor(
-        source_id="smoke-A1",
-        cluster_id=CLUSTER_ID,
-        engine=engine,
-        grid_row=5,
-        grid_col=3,
-        noise_std=1.0,
-    ),
-    
-    # Weather sensors (no grid position — global readings)
-    HumiditySensor(
-        source_id="hum-A1",
-        cluster_id=CLUSTER_ID,
-        engine=engine,
-        noise_std=0.5,
-    ),
-    WindSensor(
-        source_id="wind-A1",
-        cluster_id=CLUSTER_ID,
-        engine=engine,
-    ),
+   # Temperature sensors at different grid positions
+   TemperatureSensor(
+      source_id="temp-A1",
+      cluster_id=CLUSTER_ID,
+      engine=engine,
+      grid_row=3,
+      grid_col=3,
+      noise_std=0.5,
+   ),
+   TemperatureSensor(
+      source_id="temp-B2",
+      cluster_id=CLUSTER_ID,
+      engine=engine,
+      grid_row=7,
+      grid_col=2,
+      noise_std=0.5,
+   ),
+
+   # Smoke sensor near expected fire path
+   SmokeSensor(
+      source_id="smoke-A1",
+      cluster_id=CLUSTER_ID,
+      engine=engine,
+      grid_row=5,
+      grid_col=3,
+      noise_std=1.0,
+   ),
+
+   # Weather sensors (no grid position — global readings)
+   HumiditySensor(
+      source_id="hum-A1",
+      cluster_id=CLUSTER_ID,
+      engine=engine,
+      noise_std=0.5,
+   ),
+   WindSensor(
+      source_id="wind-A1",
+      cluster_id=CLUSTER_ID,
+      engine=engine,
+   ),
 ]
 
 print(f"Created {len(sensors)} sensors: {[s.source_id for s in sensors]}")
@@ -166,7 +166,7 @@ Created 5 sensors: ['temp-A1', 'temp-B2', 'smoke-A1', 'hum-A1', 'wind-A1']
 ### Step 3: Create the Event Queue
 
 ```python
-from ogar.transport.queue import SensorEventQueue
+from transport import SensorEventQueue
 
 # Create an async queue with max size 200
 queue = SensorEventQueue(maxsize=200)
@@ -179,13 +179,13 @@ print(f"Queue created: max size {queue.maxsize}")
 ### Step 4: Create the Sensor Publisher
 
 ```python
-from ogar.sensors.publisher import SensorPublisher
+from sensors import SensorPublisher
 
 publisher = SensorPublisher(
-    sensors=sensors,
-    queue=queue,
-    tick_interval_seconds=0.1,  # Tick every 100ms (fast for demo)
-    engine=engine,              # Auto-tick the world
+   sensors=sensors,
+   queue=queue,
+   tick_interval_seconds=0.1,  # Tick every 100ms (fast for demo)
+   engine=engine,  # Auto-tick the world
 )
 
 print("Publisher created (will auto-tick the world)")
@@ -198,7 +198,7 @@ print("Publisher created (will auto-tick the world)")
 ### Step 5: Create the Cluster Agent Graph
 
 ```python
-from ogar.agents.cluster.graph import build_cluster_agent_graph
+from agents.cluster.graph import build_cluster_agent_graph
 
 # Stub mode (no LLM)
 cluster_graph = build_cluster_agent_graph()
@@ -221,21 +221,23 @@ print("Cluster agent graph built (LLM mode)")
 ### Step 6: Create the Event Bridge Consumer
 
 ```python
-from ogar.bridge.consumer import EventBridgeConsumer
+from bridge.consumer import EventBridgeConsumer
 
 # Track findings
 findings_log = []
 
+
 def on_finding(finding):
-    """Callback invoked for each AnomalyFinding."""
-    findings_log.append(finding)
-    print(f"🔥 FINDING: {finding['summary'][:80]}")
+   """Callback invoked for each AnomalyFinding."""
+   findings_log.append(finding)
+   print(f"🔥 FINDING: {finding['summary'][:80]}")
+
 
 consumer = EventBridgeConsumer(
-    queue=queue,
-    agent_graph=cluster_graph,
-    on_finding=on_finding,
-    batch_size=5,  # Invoke agent every 5 events per cluster
+   queue=queue,
+   agent_graph=cluster_graph,
+   on_finding=on_finding,
+   batch_size=5,  # Invoke agent every 5 events per cluster
 )
 
 print("Consumer created (batch_size=5)")
@@ -319,118 +321,119 @@ Full pipeline demo: World → Sensors → Queue → Agents → Findings
 
 import asyncio
 import random
-from ogar.world.scenarios.wildfire_basic import create_basic_wildfire
-from ogar.sensors.world_sensors import (
-    TemperatureSensor,
-    SmokeSensor,
-    WindSensor,
-    HumiditySensor,
+from world import create_basic_wildfire
+from sensors import (
+   TemperatureSensor,
+   SmokeSensor,
+   WindSensor,
+   HumiditySensor,
 )
-from ogar.sensors.publisher import SensorPublisher
-from ogar.transport.queue import SensorEventQueue
-from ogar.bridge.consumer import EventBridgeConsumer
-from ogar.agents.cluster.graph import build_cluster_agent_graph
+from sensors import SensorPublisher
+from transport import SensorEventQueue
+from bridge.consumer import EventBridgeConsumer
+from agents.cluster.graph import build_cluster_agent_graph
 
 
 async def main():
-    # Set seed for reproducibility
-    random.seed(42)
-    
-    # 1. Create the world
-    engine = create_basic_wildfire()
-    print(f"World: {engine.grid.rows}×{engine.grid.cols} grid, fire at (7,2)")
-    print(f"Weather: {engine.environment.temperature_c}°C, {engine.environment.humidity_pct}% humidity")
-    
-    # 2. Create sensors
-    CLUSTER_ID = "cluster-north"
-    sensors = [
-        TemperatureSensor(
-            source_id="temp-A1",
-            cluster_id=CLUSTER_ID,
-            engine=engine,
-            grid_row=3, grid_col=3,
-            noise_std=0.5,
-        ),
-        TemperatureSensor(
-            source_id="temp-B2",
-            cluster_id=CLUSTER_ID,
-            engine=engine,
-            grid_row=7, grid_col=2,
-            noise_std=0.5,
-        ),
-        SmokeSensor(
-            source_id="smoke-A1",
-            cluster_id=CLUSTER_ID,
-            engine=engine,
-            grid_row=5, grid_col=3,
-            noise_std=1.0,
-        ),
-        HumiditySensor(
-            source_id="hum-A1",
-            cluster_id=CLUSTER_ID,
-            engine=engine,
-            noise_std=0.5,
-        ),
-        WindSensor(
-            source_id="wind-A1",
-            cluster_id=CLUSTER_ID,
-            engine=engine,
-        ),
-    ]
-    print(f"Sensors: {[s.source_id for s in sensors]}")
-    
-    # 3. Create queue
-    queue = SensorEventQueue(maxsize=200)
-    
-    # 4. Create publisher (auto-ticks the world)
-    publisher = SensorPublisher(
-        sensors=sensors,
-        queue=queue,
-        tick_interval_seconds=0.0,  # As fast as possible
-        engine=engine,
-    )
-    
-    # 5. Create cluster agent graph
-    cluster_graph = build_cluster_agent_graph()
-    
-    # 6. Create consumer
-    findings_log = []
-    def on_finding(finding):
-        findings_log.append(finding)
-        print(f"🔥 {finding['anomaly_type']}: {finding['summary'][:60]}")
-    
-    consumer = EventBridgeConsumer(
-        queue=queue,
-        agent_graph=cluster_graph,
-        on_finding=on_finding,
-        batch_size=5,
-    )
-    
-    # 7. Run the pipeline
-    NUM_TICKS = 15
-    print("=" * 60)
-    print(f"Running pipeline: {NUM_TICKS} ticks")
-    print("=" * 60)
-    
-    await publisher.run(ticks=NUM_TICKS)
-    await consumer.run(max_events=queue.total_enqueued)
-    
-    # 8. Summary
-    print("=" * 60)
-    print("Pipeline complete")
-    print(f"  Ticks:    {engine.current_tick}")
-    print(f"  Events:   {queue.total_enqueued}")
-    print(f"  Findings: {len(findings_log)}")
-    print("=" * 60)
-    
-    # 9. Ground truth vs findings
-    snap = engine.history[-1]
-    print(f"\nGround truth: {snap.domain_summary['burning_cells']} cells burning")
-    print(f"Agent detected: {len(findings_log)} anomalies")
+   # Set seed for reproducibility
+   random.seed(42)
+
+   # 1. Create the world
+   engine = create_basic_wildfire()
+   print(f"World: {engine.grid.rows}×{engine.grid.cols} grid, fire at (7,2)")
+   print(f"Weather: {engine.environment.temperature_c}°C, {engine.environment.humidity_pct}% humidity")
+
+   # 2. Create sensors
+   CLUSTER_ID = "cluster-north"
+   sensors = [
+      TemperatureSensor(
+         source_id="temp-A1",
+         cluster_id=CLUSTER_ID,
+         engine=engine,
+         grid_row=3, grid_col=3,
+         noise_std=0.5,
+      ),
+      TemperatureSensor(
+         source_id="temp-B2",
+         cluster_id=CLUSTER_ID,
+         engine=engine,
+         grid_row=7, grid_col=2,
+         noise_std=0.5,
+      ),
+      SmokeSensor(
+         source_id="smoke-A1",
+         cluster_id=CLUSTER_ID,
+         engine=engine,
+         grid_row=5, grid_col=3,
+         noise_std=1.0,
+      ),
+      HumiditySensor(
+         source_id="hum-A1",
+         cluster_id=CLUSTER_ID,
+         engine=engine,
+         noise_std=0.5,
+      ),
+      WindSensor(
+         source_id="wind-A1",
+         cluster_id=CLUSTER_ID,
+         engine=engine,
+      ),
+   ]
+   print(f"Sensors: {[s.source_id for s in sensors]}")
+
+   # 3. Create queue
+   queue = SensorEventQueue(maxsize=200)
+
+   # 4. Create publisher (auto-ticks the world)
+   publisher = SensorPublisher(
+      sensors=sensors,
+      queue=queue,
+      tick_interval_seconds=0.0,  # As fast as possible
+      engine=engine,
+   )
+
+   # 5. Create cluster agent graph
+   cluster_graph = build_cluster_agent_graph()
+
+   # 6. Create consumer
+   findings_log = []
+
+   def on_finding(finding):
+      findings_log.append(finding)
+      print(f"🔥 {finding['anomaly_type']}: {finding['summary'][:60]}")
+
+   consumer = EventBridgeConsumer(
+      queue=queue,
+      agent_graph=cluster_graph,
+      on_finding=on_finding,
+      batch_size=5,
+   )
+
+   # 7. Run the pipeline
+   NUM_TICKS = 15
+   print("=" * 60)
+   print(f"Running pipeline: {NUM_TICKS} ticks")
+   print("=" * 60)
+
+   await publisher.run(ticks=NUM_TICKS)
+   await consumer.run(max_events=queue.total_enqueued)
+
+   # 8. Summary
+   print("=" * 60)
+   print("Pipeline complete")
+   print(f"  Ticks:    {engine.current_tick}")
+   print(f"  Events:   {queue.total_enqueued}")
+   print(f"  Findings: {len(findings_log)}")
+   print("=" * 60)
+
+   # 9. Ground truth vs findings
+   snap = engine.history[-1]
+   print(f"\nGround truth: {snap.domain_summary['burning_cells']} cells burning")
+   print(f"Agent detected: {len(findings_log)} anomalies")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+   asyncio.run(main())
 ```
 
 **Save as `my_pipeline.py` and run:**
@@ -445,26 +448,26 @@ python my_pipeline.py
 To add cross-cluster correlation, wire in the supervisor:
 
 ```python
-from ogar.agents.supervisor.graph import build_supervisor_graph
+from agents.supervisor.graph import build_supervisor_graph
 
 # Build supervisor graph
 supervisor_graph = build_supervisor_graph()
 
 # After cluster agents finish, invoke supervisor
 supervisor_result = supervisor_graph.invoke({
-    "active_cluster_ids": ["cluster-north", "cluster-south"],
-    "cluster_findings": findings_log,  # All findings from cluster agents
-    "messages": [],
-    "pending_commands": [],
-    "situation_summary": None,
-    "status": "idle",
+   "active_cluster_ids": ["cluster-north", "cluster-south"],
+   "cluster_findings": findings_log,  # All findings from cluster agents
+   "messages": [],
+   "pending_commands": [],
+   "situation_summary": None,
+   "status": "idle",
 })
 
 # Check what commands the supervisor issued
 commands = supervisor_result["pending_commands"]
 print(f"\nSupervisor issued {len(commands)} commands:")
 for cmd in commands:
-    print(f"  - {cmd.command_type}: {cmd.payload}")
+   print(f"  - {cmd.command_type}: {cmd.payload}")
 ```
 
 **Example output:**
@@ -561,13 +564,13 @@ After the pipeline runs, compare what the agent detected vs. what actually happe
 
 ```python
 # Ground truth
-from ogar.domains.wildfire.cell_state import FireState
+from domains.wildfire import FireState
 
 snapshot = engine.history[-1]  # Last tick
 burning_cells = [
-    (r, c) for r in range(engine.grid.rows)
-    for c in range(engine.grid.cols)
-    if engine.grid.get_cell(r, c).cell_state.fire_state == FireState.BURNING
+   (r, c) for r in range(engine.grid.rows)
+   for c in range(engine.grid.cols)
+   if engine.grid.get_cell(r, c).cell_state.fire_state == FireState.BURNING
 ]
 
 print(f"Ground truth: {len(burning_cells)} cells burning")
@@ -576,9 +579,9 @@ print(f"Burning cells: {burning_cells}")
 # Agent findings
 print(f"\nAgent detected: {len(findings_log)} anomalies")
 for f in findings_log:
-    print(f"  - {f['cluster_id']}: {f['summary']}")
-    print(f"    Affected sensors: {f['affected_sensors']}")
-    print(f"    Confidence: {f['confidence']}")
+   print(f"  - {f['cluster_id']}: {f['summary']}")
+   print(f"    Affected sensors: {f['affected_sensors']}")
+   print(f"    Confidence: {f['confidence']}")
 ```
 
 **Example output:**
@@ -691,50 +694,53 @@ You now have a complete understanding of the pipeline! Here's what to explore ne
 ## Quick Reference
 
 ### Full pipeline template
+
 ```python
 import asyncio
 import random
-from ogar.domains.wildfire.scenarios import create_basic_wildfire
-from ogar.domains.wildfire.sensors import TemperatureSensor, SmokeSensor
-from ogar.sensors.publisher import SensorPublisher
-from ogar.transport.queue import SensorEventQueue
-from ogar.bridge.consumer import EventBridgeConsumer
-from ogar.agents.cluster.graph import build_cluster_agent_graph
+from domains.wildfire import create_basic_wildfire
+from domains.wildfire.sensors import TemperatureSensor, SmokeSensor
+from sensors import SensorPublisher
+from transport import SensorEventQueue
+from bridge.consumer import EventBridgeConsumer
+from agents.cluster.graph import build_cluster_agent_graph
+
 
 async def main():
-    random.seed(42)
-    
-    # World
-    engine = create_basic_wildfire()
-    
-    # Sensors
-    sensors = [
-        TemperatureSensor(source_id="temp-1", cluster_id="cluster-north", engine=engine, grid_row=3, grid_col=3),
-        SmokeSensor(source_id="smoke-1", cluster_id="cluster-north", engine=engine, grid_row=5, grid_col=3),
-    ]
-    
-    # Queue
-    queue = SensorEventQueue()
-    
-    # Publisher
-    publisher = SensorPublisher(sensors=sensors, queue=queue, engine=engine)
-    
-    # Agent
-    cluster_graph = build_cluster_agent_graph()
-    
-    # Consumer
-    findings = []
-    consumer = EventBridgeConsumer(
-        queue=queue,
-        agent_graph=cluster_graph,
-        on_finding=lambda f: findings.append(f),
-    )
-    
-    # Run
-    await publisher.run(ticks=15)
-    await consumer.run(max_events=queue.total_enqueued)
-    
-    print(f"Findings: {len(findings)}")
+   random.seed(42)
+
+   # World
+   engine = create_basic_wildfire()
+
+   # Sensors
+   sensors = [
+      TemperatureSensor(source_id="temp-1", cluster_id="cluster-north", engine=engine, grid_row=3, grid_col=3),
+      SmokeSensor(source_id="smoke-1", cluster_id="cluster-north", engine=engine, grid_row=5, grid_col=3),
+   ]
+
+   # Queue
+   queue = SensorEventQueue()
+
+   # Publisher
+   publisher = SensorPublisher(sensors=sensors, queue=queue, engine=engine)
+
+   # Agent
+   cluster_graph = build_cluster_agent_graph()
+
+   # Consumer
+   findings = []
+   consumer = EventBridgeConsumer(
+      queue=queue,
+      agent_graph=cluster_graph,
+      on_finding=lambda f: findings.append(f),
+   )
+
+   # Run
+   await publisher.run(ticks=15)
+   await consumer.run(max_events=queue.total_enqueued)
+
+   print(f"Findings: {len(findings)}")
+
 
 asyncio.run(main())
 ```

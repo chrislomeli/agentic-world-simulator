@@ -30,8 +30,8 @@ from pathlib import Path
 # Add src/ to path when running directly (not needed with pip install -e .)
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from ogar.world.scenarios.wildfire_basic import create_basic_wildfire
-from ogar.sensors.world_sensors import (
+from world import create_basic_wildfire
+from sensors import (
     TemperatureSensor,
     HumiditySensor,
     WindSensor,
@@ -39,7 +39,7 @@ from ogar.sensors.world_sensors import (
     BarometricSensor,
     ThermalCameraSensor,
 )
-from ogar.world.grid import FireState
+from world.grid import FireState
 
 
 def print_grid(engine, tick: int) -> None:
@@ -65,7 +65,7 @@ def print_grid(engine, tick: int) -> None:
         row_str = []
         for c in range(engine.grid.cols):
             cell = engine.grid.get_cell(r, c)
-            from ogar.world.grid import TerrainType
+            from world.grid import TerrainType
             if cell.terrain_type == TerrainType.WATER:
                 row_str.append("~")
             elif cell.terrain_type == TerrainType.ROCK:

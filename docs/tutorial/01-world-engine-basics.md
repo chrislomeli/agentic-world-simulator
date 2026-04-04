@@ -57,10 +57,11 @@ A 2D grid of cells, like a chessboard. Each cell is a small patch of land (imagi
 Cell state is **immutable** — instead of mutating a cell, you create a new state and inject it.
 
 **Example:**
+
 ```python
-from ogar.domains.wildfire.physics import FirePhysicsModule
-from ogar.domains.wildfire.cell_state import FireCellState, TerrainType
-from ogar.world.generic_grid import GenericTerrainGrid
+from domains.wildfire import FirePhysicsModule
+from domains.wildfire import FireCellState, TerrainType
+from world.generic_grid import GenericTerrainGrid
 
 # Create a physics module (provides the initial cell state factory)
 physics = FirePhysicsModule()
@@ -100,15 +101,16 @@ The environment captures ambient conditions that affect physics. It is a pluggab
 - **Barometric pressure** (hPa)
 
 **Example:**
+
 ```python
-from ogar.domains.wildfire.environment import FireEnvironmentState
+from domains.wildfire.environment import FireEnvironmentState
 
 # Hot, dry, windy day — perfect for wildfires
 env = FireEnvironmentState(
-    temperature_c=35,       # Hot
-    humidity_pct=15,        # Very dry
-    wind_speed_mps=8,       # Strong wind
-    wind_direction_deg=225, # Blowing from the south-west
+    temperature_c=35,  # Hot
+    humidity_pct=15,  # Very dry
+    wind_speed_mps=8,  # Strong wind
+    wind_direction_deg=225,  # Blowing from the south-west
 )
 ```
 
@@ -143,12 +145,13 @@ This is the "game engine" that decides how state evolves each tick. For wildfire
 4. **Ground truth snapshot is saved** (the answer key)
 
 **Example:**
+
 ```python
-from ogar.domains.wildfire.physics import FirePhysicsModule
-from ogar.domains.wildfire.environment import FireEnvironmentState
-from ogar.domains.wildfire.cell_state import FireCellState, TerrainType
-from ogar.world.generic_engine import GenericWorldEngine
-from ogar.world.generic_grid import GenericTerrainGrid
+from domains.wildfire import FirePhysicsModule
+from domains.wildfire.environment import FireEnvironmentState
+from domains.wildfire import FireCellState, TerrainType
+from world import GenericWorldEngine
+from world.generic_grid import GenericTerrainGrid
 
 # 1. Create the physics module and grid
 physics = FirePhysicsModule()
@@ -210,7 +213,7 @@ This is how you evaluate whether your agent is good at detecting fires.
 Instead of building a grid from scratch every time, you can use pre-built scenarios:
 
 ```python
-from ogar.domains.wildfire.scenarios import create_basic_wildfire
+from domains.wildfire import create_basic_wildfire
 
 # Get a fully configured engine ready to run
 engine = create_basic_wildfire()
@@ -274,13 +277,14 @@ The engine is **pure simulation**. It does NOT:
 - Make decisions or take actions
 
 **Sensors are separate.** They hold a reference to the engine and sample from it:
+
 ```python
-from ogar.domains.wildfire.sensors import TemperatureSensor
+from domains.wildfire.sensors import TemperatureSensor
 
 sensor = TemperatureSensor(
     source_id="temp-001",
     cluster_id="cluster-north",
-    engine=engine,   # Reference to the world
+    engine=engine,  # Reference to the world
     grid_row=2,
     grid_col=3,
 )
@@ -304,12 +308,13 @@ Now that you understand the World Engine, the next tutorial will cover:
 ## Quick Reference
 
 ### Create a simple world
+
 ```python
-from ogar.domains.wildfire.physics import FirePhysicsModule
-from ogar.domains.wildfire.environment import FireEnvironmentState
-from ogar.domains.wildfire.cell_state import FireCellState
-from ogar.world.generic_engine import GenericWorldEngine
-from ogar.world.generic_grid import GenericTerrainGrid
+from domains.wildfire import FirePhysicsModule
+from domains.wildfire.environment import FireEnvironmentState
+from domains.wildfire import FireCellState
+from world import GenericWorldEngine
+from world.generic_grid import GenericTerrainGrid
 
 physics = FirePhysicsModule()
 grid = GenericTerrainGrid(rows=10, cols=10, initial_state_factory=physics.initial_cell_state)
@@ -335,8 +340,9 @@ current_env = engine.environment
 ```
 
 ### Use a pre-built scenario
+
 ```python
-from ogar.domains.wildfire.scenarios import create_basic_wildfire
+from domains.wildfire import create_basic_wildfire
 
 engine = create_basic_wildfire()
 engine.run(ticks=60)

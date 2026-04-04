@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import pytest
 from pydantic import ValidationError
 
-from ogar.transport.schemas import SensorEvent
+from transport import SensorEvent
 
 
 class TestSensorEventCreate:

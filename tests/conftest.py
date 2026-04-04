@@ -7,12 +7,11 @@ Seeding random ensures deterministic results across all test modules.
 import random
 import pytest
 
-from ogar.domains.wildfire.cell_state import FireCellState, FireState, TerrainType
-from ogar.domains.wildfire.environment import FireEnvironmentState
-from ogar.domains.wildfire.physics import FirePhysicsModule
-from ogar.world.generic_engine import GenericWorldEngine
-from ogar.world.generic_grid import GenericTerrainGrid
-from ogar.transport.schemas import SensorEvent
+from domains.wildfire.environment import FireEnvironmentState
+from domains.wildfire import FirePhysicsModule
+from world import GenericWorldEngine
+from world.generic_grid import GenericTerrainGrid
+from transport import SensorEvent
 
 
 @pytest.fixture(autouse=True)

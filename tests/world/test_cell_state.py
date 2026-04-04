@@ -1,9 +1,8 @@
 """Tests for ogar.world.cell_state — CellState ABC and GenericCell."""
 
 import pytest
-from pydantic import ValidationError
 
-from ogar.world.cell_state import CellState, GenericCell
+from world.cell_state import CellState, GenericCell
 
 
 # ── Test CellState subclass ──────────────────────────────────────────────────

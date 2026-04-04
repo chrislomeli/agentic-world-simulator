@@ -3,10 +3,9 @@
 import asyncio
 
 import pytest
-import pytest_asyncio
 
-from ogar.transport.queue import SensorEventQueue
-from ogar.transport.schemas import SensorEvent
+from transport import SensorEventQueue
+from transport import SensorEvent
 
 
 @pytest.fixture

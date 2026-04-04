@@ -2,7 +2,7 @@
 
 import pytest
 
-from ogar.transport.topics import (
+from transport import (
     sensor_topic,
     all_sensor_topic_pattern,
     EVENTS_ANOMALY,

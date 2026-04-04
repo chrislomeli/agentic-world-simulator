@@ -1,22 +1,19 @@
 """Tests for ogar.agents.cluster — state reducers, node functions, graph."""
 
-import pytest
-
-from ogar.agents.cluster.state import (
+from agents.cluster.state import (
     append_events,
     AnomalyFinding,
-    ClusterAgentState,
 )
 from langgraph.store.memory import InMemoryStore
 
-from ogar.agents.cluster.graph import (
+from agents.cluster.graph import (
     ingest_events,
     classify,
     report_findings,
     route_after_classify,
     build_cluster_agent_graph,
 )
-from ogar.transport.schemas import SensorEvent
+from transport import SensorEvent
 
 
 def _make_event(source_id: str = "s1") -> SensorEvent:

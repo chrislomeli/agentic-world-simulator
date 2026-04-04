@@ -1,12 +1,10 @@
 """Tests for domains.wildfire.sensors — 6 concrete fire sensor types."""
 
-import random
 import pytest
 
-from ogar.domains.wildfire.cell_state import FireCellState
-from ogar.domains.wildfire.environment import FireEnvironmentState
-from ogar.domains.wildfire.physics import FirePhysicsModule
-from ogar.domains.wildfire.sensors import (
+from domains.wildfire.environment import FireEnvironmentState
+from domains.wildfire import FirePhysicsModule
+from domains.wildfire.sensors import (
     TemperatureSensor,
     HumiditySensor,
     WindSensor,
@@ -14,9 +12,9 @@ from ogar.domains.wildfire.sensors import (
     BarometricSensor,
     ThermalCameraSensor,
 )
-from ogar.world.generic_engine import GenericWorldEngine
-from ogar.world.generic_grid import GenericTerrainGrid
-from ogar.transport.schemas import SensorEvent
+from world import GenericWorldEngine
+from world.generic_grid import GenericTerrainGrid
+from transport import SensorEvent
 
 
 @pytest.fixture

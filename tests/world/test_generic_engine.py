@@ -3,11 +3,11 @@
 import pytest
 from typing import Any, Dict, List
 
-from ogar.world.cell_state import CellState
-from ogar.world.environment import EnvironmentState
-from ogar.world.generic_engine import GenericGroundTruthSnapshot, GenericWorldEngine
-from ogar.world.generic_grid import GenericTerrainGrid
-from ogar.world.physics import PhysicsModule, StateEvent
+from world.cell_state import CellState
+from world import EnvironmentState
+from world import GenericGroundTruthSnapshot, GenericWorldEngine
+from world.generic_grid import GenericTerrainGrid
+from world import PhysicsModule, StateEvent
 
 
 # ── Toy domain for testing the engine ────────────────────────────────────────

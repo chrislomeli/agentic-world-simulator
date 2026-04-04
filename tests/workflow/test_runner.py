@@ -4,8 +4,8 @@ import asyncio
 
 import pytest
 
-from ogar.workflow.runner import WorkflowRunner, WorkflowStatus
-from ogar.workflow.stub import AsyncioWorkflowRunner
+from workflow.runner import WorkflowRunner, WorkflowStatus
+from workflow.stub import AsyncioWorkflowRunner
 
 
 @pytest.fixture

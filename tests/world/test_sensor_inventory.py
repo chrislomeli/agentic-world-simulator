@@ -2,8 +2,8 @@
 
 import pytest
 
-from ogar.sensors.base import FailureMode, SensorBase
-from ogar.world.sensor_inventory import SensorInventory
+from sensors.base import FailureMode, SensorBase
+from world import SensorInventory
 
 
 # ── Minimal sensor for testing ───────────────────────────────────────────────

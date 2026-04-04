@@ -2,8 +2,8 @@
 
 import pytest
 
-from ogar.world.cell_state import CellState
-from ogar.world.physics import PhysicsModule, StateEvent
+from world.cell_state import CellState
+from world import PhysicsModule, StateEvent
 
 
 # ── Test fixtures ────────────────────────────────────────────────────────────

@@ -233,8 +233,8 @@ This structured format lets the supervisor agent aggregate and correlate finding
 ### Example: Running a Cluster Agent
 
 ```python
-from ogar.agents.cluster.graph import build_cluster_agent_graph
-from ogar.transport.schemas import SensorEvent
+from agents.cluster.graph import build_cluster_agent_graph
+from transport import SensorEvent
 from datetime import datetime, timezone
 
 # Build the graph (stub mode)
@@ -454,12 +454,12 @@ This is how the supervisor scales to N clusters without blocking.
 
 ```python
 import asyncio
-from ogar.domains.wildfire.scenarios import create_basic_wildfire
-from ogar.domains.wildfire.sensors import TemperatureSensor, SmokeSensor
-from ogar.sensors.publisher import SensorPublisher
-from ogar.transport.queue import SensorEventQueue
-from ogar.bridge.consumer import EventBridgeConsumer
-from ogar.agents.cluster.graph import build_cluster_agent_graph
+from domains.wildfire import create_basic_wildfire
+from domains.wildfire.sensors import TemperatureSensor, SmokeSensor
+from sensors import SensorPublisher
+from transport import SensorEventQueue
+from bridge.consumer import EventBridgeConsumer
+from agents.cluster.graph import build_cluster_agent_graph
 
 # 1. Create the world
 engine = create_basic_wildfire()
@@ -498,9 +498,12 @@ cluster_graph = build_cluster_agent_graph()
 
 # 6. Create the bridge consumer
 findings = []
+
+
 def on_finding(finding):
     findings.append(finding)
     print(f"Finding: {finding['summary']}")
+
 
 consumer = EventBridgeConsumer(
     queue=queue,
@@ -508,22 +511,24 @@ consumer = EventBridgeConsumer(
     on_finding=on_finding,
 )
 
+
 # 7. Run everything
 async def run_pipeline():
     # Start the consumer
     consumer_task = asyncio.create_task(consumer.run())
-    
+
     # Run the publisher for 60 ticks
     await publisher.run(ticks=60)
-    
+
     # Stop the consumer
     consumer.stop()
     await consumer_task
-    
+
     # Print results
     print(f"\nTotal findings: {len(findings)}")
     for f in findings:
         print(f"  - {f['cluster_id']}: {f['summary']}")
+
 
 asyncio.run(run_pipeline())
 ```
@@ -586,14 +591,16 @@ Now that you understand agents, the final tutorial will cover:
 ## Quick Reference
 
 ### Build a cluster agent graph
+
 ```python
-from ogar.agents.cluster.graph import build_cluster_agent_graph
+from agents.cluster.graph import build_cluster_agent_graph
 
 # Stub mode
 graph = build_cluster_agent_graph()
 
 # LLM mode
 from langchain_openai import ChatOpenAI
+
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 graph = build_cluster_agent_graph(llm=llm)
 ```
@@ -613,8 +620,9 @@ findings = result["anomalies"]
 ```
 
 ### Build a supervisor graph
+
 ```python
-from ogar.agents.supervisor.graph import build_supervisor_graph
+from agents.supervisor.graph import build_supervisor_graph
 
 # Stub mode
 graph = build_supervisor_graph()

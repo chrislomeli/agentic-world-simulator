@@ -1,6 +1,6 @@
 """Tests for ogar.tools.sensor_tools — tools the LLM calls during classification."""
 
-from ogar.tools.sensor_tools import (
+from tools.sensor_tools import (
     get_recent_readings,
     get_sensor_summary,
     check_threshold,
@@ -9,7 +9,7 @@ from ogar.tools.sensor_tools import (
     clear_tool_state,
     SENSOR_TOOLS,
 )
-from ogar.transport.schemas import SensorEvent
+from transport import SensorEvent
 
 
 def _make_event(
@@ -189,7 +189,7 @@ class TestClusterGraphStubMode:
     """Verify the cluster agent graph still works in stub mode after refactor."""
 
     def test_stub_mode_invoke(self, sample_event):
-        from ogar.agents.cluster.graph import build_cluster_agent_graph
+        from agents.cluster.graph import build_cluster_agent_graph
 
         graph = build_cluster_agent_graph()  # no llm = stub
         result = graph.invoke({
@@ -207,7 +207,7 @@ class TestClusterGraphStubMode:
         assert result["anomalies"][0]["anomaly_type"] == "stub_placeholder"
 
     def test_stub_mode_graph_nodes(self):
-        from ogar.agents.cluster.graph import build_cluster_agent_graph
+        from agents.cluster.graph import build_cluster_agent_graph
 
         graph = build_cluster_agent_graph()
         node_names = set(graph.get_graph().nodes.keys())
@@ -224,7 +224,7 @@ class TestClusterGraphLLMMode:
 
     def test_llm_mode_has_tool_node(self):
         from unittest.mock import MagicMock
-        from ogar.agents.cluster.graph import build_cluster_agent_graph
+        from agents.cluster.graph import build_cluster_agent_graph
 
         mock_llm = MagicMock()
         mock_llm.bind_tools.return_value = mock_llm
@@ -242,7 +242,7 @@ class TestRouteAfterClassifyLLM:
 
     def test_routes_to_tool_node_on_tool_calls(self):
         from langchain_core.messages import AIMessage
-        from ogar.agents.cluster.graph import route_after_classify_llm
+        from agents.cluster.graph import route_after_classify_llm
 
         ai_msg = AIMessage(content="", tool_calls=[{"name": "get_recent_readings", "args": {}, "id": "1"}])
         state = {"status": "processing", "messages": [ai_msg]}
@@ -250,14 +250,14 @@ class TestRouteAfterClassifyLLM:
 
     def test_routes_to_parse_on_no_tool_calls(self):
         from langchain_core.messages import AIMessage
-        from ogar.agents.cluster.graph import route_after_classify_llm
+        from agents.cluster.graph import route_after_classify_llm
 
         ai_msg = AIMessage(content='{"anomaly_detected": false}')
         state = {"status": "processing", "messages": [ai_msg]}
         assert route_after_classify_llm(state) == "parse_findings"
 
     def test_routes_to_end_on_error(self):
-        from ogar.agents.cluster.graph import route_after_classify_llm
+        from agents.cluster.graph import route_after_classify_llm
 
         state = {"status": "error", "messages": []}
         assert route_after_classify_llm(state) == "__end__"
@@ -268,7 +268,7 @@ class TestParseLLMFindings:
 
     def test_parses_valid_json(self):
         from langchain_core.messages import AIMessage
-        from ogar.agents.cluster.graph import _parse_llm_findings
+        from agents.cluster.graph import _parse_llm_findings
 
         ai_msg = AIMessage(content='{"anomaly_detected": true, "anomaly_type": "threshold_breach", "affected_sensors": ["temp-A1"], "confidence": 0.9, "summary": "High temperature"}')
         state = {
@@ -285,7 +285,7 @@ class TestParseLLMFindings:
 
     def test_parses_no_anomaly(self):
         from langchain_core.messages import AIMessage
-        from ogar.agents.cluster.graph import _parse_llm_findings
+        from agents.cluster.graph import _parse_llm_findings
 
         ai_msg = AIMessage(content='{"anomaly_detected": false, "anomaly_type": "none", "affected_sensors": [], "confidence": 0.1, "summary": "Normal"}')
         state = {
@@ -300,7 +300,7 @@ class TestParseLLMFindings:
 
     def test_handles_markdown_fence(self):
         from langchain_core.messages import AIMessage
-        from ogar.agents.cluster.graph import _parse_llm_findings
+        from agents.cluster.graph import _parse_llm_findings
 
         content = '```json\n{"anomaly_detected": true, "anomaly_type": "sensor_fault", "affected_sensors": ["s1"], "confidence": 0.8, "summary": "Fault"}\n```'
         ai_msg = AIMessage(content=content)
@@ -316,7 +316,7 @@ class TestParseLLMFindings:
 
     def test_handles_unparseable_response(self):
         from langchain_core.messages import AIMessage
-        from ogar.agents.cluster.graph import _parse_llm_findings
+        from agents.cluster.graph import _parse_llm_findings
 
         ai_msg = AIMessage(content="I think there might be an anomaly but I'm not sure.")
         state = {
@@ -332,7 +332,7 @@ class TestParseLLMFindings:
         assert result["anomalies"][0]["anomaly_type"] == "llm_parse_fallback"
 
     def test_no_ai_message(self):
-        from ogar.agents.cluster.graph import _parse_llm_findings
+        from agents.cluster.graph import _parse_llm_findings
 
         state = {
             "cluster_id": "c1",

@@ -33,8 +33,8 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from ogar.sensors.base import SensorBase, FailureMode
-from ogar.transport.schemas import SensorEvent
+from sensors.base import SensorBase, FailureMode
+from transport import SensorEvent
 
 
 # ── Concrete sensor implementation ────────────────────────────────────────────

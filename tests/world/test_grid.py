@@ -2,9 +2,9 @@
 
 import pytest
 
-from ogar.domains.wildfire.cell_state import FireCellState, FireState, TerrainType
-from ogar.domains.wildfire.physics import FirePhysicsModule
-from ogar.world.generic_grid import GenericTerrainGrid
+from domains.wildfire import FireCellState, FireState, TerrainType
+from domains.wildfire import FirePhysicsModule
+from world.generic_grid import GenericTerrainGrid
 
 
 @pytest.fixture
@@ -108,7 +108,7 @@ class TestFireGrid:
             GenericTerrainGrid(rows=5, cols=-1, initial_state_factory=physics.initial_cell_state)
 
     def test_get_cell_valid(self, small_fire_grid):
-        from ogar.world.cell_state import GenericCell
+        from world.cell_state import GenericCell
         cell = small_fire_grid.get_cell(0, 0)
         assert isinstance(cell, GenericCell)
         assert isinstance(cell.cell_state, FireCellState)

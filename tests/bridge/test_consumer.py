@@ -4,10 +4,10 @@ import asyncio
 
 import pytest
 
-from ogar.bridge.consumer import EventBridgeConsumer
-from ogar.agents.cluster.graph import build_cluster_agent_graph
-from ogar.transport.queue import SensorEventQueue
-from ogar.transport.schemas import SensorEvent
+from bridge.consumer import EventBridgeConsumer
+from agents.cluster.graph import build_cluster_agent_graph
+from transport import SensorEventQueue
+from transport import SensorEvent
 
 
 def _make_event(source_id: str = "s1", cluster_id: str = "cluster-north") -> SensorEvent:
@@ -141,12 +141,12 @@ class TestPublisherEngineTick:
 
     @pytest.mark.asyncio
     async def test_publisher_ticks_engine(self):
-        from ogar.sensors.publisher import SensorPublisher
-        from ogar.sensors.base import SensorBase
-        from ogar.domains.wildfire.physics import FirePhysicsModule
-        from ogar.domains.wildfire.environment import FireEnvironmentState
-        from ogar.world.generic_engine import GenericWorldEngine
-        from ogar.world.generic_grid import GenericTerrainGrid
+        from sensors import SensorPublisher
+        from sensors.base import SensorBase
+        from domains.wildfire import FirePhysicsModule
+        from domains.wildfire.environment import FireEnvironmentState
+        from world import GenericWorldEngine
+        from world.generic_grid import GenericTerrainGrid
 
         physics = FirePhysicsModule(base_probability=0.0)
         grid = GenericTerrainGrid(rows=3, cols=3, initial_state_factory=physics.initial_cell_state)
@@ -173,8 +173,8 @@ class TestPublisherEngineTick:
 
     @pytest.mark.asyncio
     async def test_publisher_without_engine_unchanged(self):
-        from ogar.sensors.publisher import SensorPublisher
-        from ogar.sensors.base import SensorBase
+        from sensors import SensorPublisher
+        from sensors.base import SensorBase
 
         class _Stub(SensorBase):
             source_type = "stub"

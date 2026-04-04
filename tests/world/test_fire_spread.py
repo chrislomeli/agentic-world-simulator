@@ -3,11 +3,11 @@
 import random
 import pytest
 
-from ogar.domains.wildfire.cell_state import FireCellState, FireState, TerrainType
-from ogar.domains.wildfire.environment import FireEnvironmentState
-from ogar.domains.wildfire.physics import FirePhysicsModule
-from ogar.world.generic_grid import GenericTerrainGrid
-from ogar.world.physics import StateEvent, PhysicsModule
+from domains.wildfire import FireCellState, FireState, TerrainType
+from domains.wildfire.environment import FireEnvironmentState
+from domains.wildfire import FirePhysicsModule
+from world.generic_grid import GenericTerrainGrid
+from world import StateEvent, PhysicsModule
 
 
 # ── Interface tests ──────────────────────────────────────────────────────────

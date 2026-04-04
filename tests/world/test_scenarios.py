@@ -1,8 +1,8 @@
 """Tests for domains.wildfire.scenarios — create_basic_wildfire."""
 
-from ogar.domains.wildfire.scenarios import create_basic_wildfire
-from ogar.domains.wildfire.cell_state import TerrainType, FireState
-from ogar.world.generic_engine import GenericWorldEngine, GenericGroundTruthSnapshot
+from domains.wildfire import create_basic_wildfire
+from domains.wildfire import TerrainType, FireState
+from world import GenericWorldEngine, GenericGroundTruthSnapshot
 
 
 class TestBasicWildfireScenario:
@@ -46,7 +46,7 @@ class TestBasicWildfireScenario:
         assert engine.grid.get_cell(8, 9).cell_state.terrain_type == TerrainType.URBAN
 
     def test_weather_conditions(self):
-        from ogar.domains.wildfire.environment import FireEnvironmentState
+        from domains.wildfire.environment import FireEnvironmentState
         engine = create_basic_wildfire()
         env = engine.environment
         assert isinstance(env, FireEnvironmentState)

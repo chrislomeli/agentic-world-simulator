@@ -1,10 +1,9 @@
 """Tests for ogar.domains.wildfire.environment."""
 
 import random
-import math
 import pytest
 
-from ogar.domains.wildfire.environment import FireEnvironmentState
+from domains.wildfire.environment import FireEnvironmentState
 
 
 @pytest.fixture(autouse=True)
@@ -77,5 +76,5 @@ class TestFireEnvironmentState:
         assert "°C" in r
 
     def test_is_environment_state_subclass(self):
-        from ogar.world.environment import EnvironmentState
+        from world import EnvironmentState
         assert issubclass(FireEnvironmentState, EnvironmentState)

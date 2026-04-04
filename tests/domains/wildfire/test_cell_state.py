@@ -1,8 +1,6 @@
 """Tests for ogar.domains.wildfire.cell_state."""
 
-import pytest
-
-from ogar.domains.wildfire.cell_state import (
+from domains.wildfire import (
     FireCellState,
     FireState,
     TerrainType,

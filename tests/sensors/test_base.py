@@ -1,9 +1,7 @@
 """Tests for ogar.sensors.base — SensorBase, FailureMode, emit."""
 
-import pytest
-
-from ogar.sensors.base import SensorBase, FailureMode
-from ogar.transport.schemas import SensorEvent
+from sensors.base import SensorBase, FailureMode
+from transport import SensorEvent
 
 
 # ── Concrete test sensor ─────────────────────────────────────────────────────

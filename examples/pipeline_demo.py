@@ -9,20 +9,20 @@ import random
 import langsmith
 from langgraph.store.memory import InMemoryStore
 
-from ogar.agents.cluster.graph import build_cluster_agent_graph
-from ogar.agents.supervisor.graph import build_supervisor_graph
-from ogar.bridge.consumer import EventBridgeConsumer
-from ogar.config import get_settings
-from ogar.domains.wildfire.scenarios import create_basic_wildfire
-from ogar.domains.wildfire.sensors import (
+from agents.cluster.graph import build_cluster_agent_graph
+from agents.supervisor.graph import build_supervisor_graph
+from bridge.consumer import EventBridgeConsumer
+from config import get_settings
+from domains.wildfire import create_basic_wildfire
+from domains.wildfire.sensors import (
     HumiditySensor,
     SmokeSensor,
     TemperatureSensor,
     WindSensor,
 )
-from ogar.sensors.publisher import SensorPublisher
-from ogar.transport.queue import SensorEventQueue
-from ogar.world.grid import FireState, TerrainType
+from sensors import SensorPublisher
+from transport import SensorEventQueue
+from world.grid import FireState, TerrainType
 
 
 def configure_environment():

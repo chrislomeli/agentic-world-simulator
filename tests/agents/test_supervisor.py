@@ -1,15 +1,13 @@
 """Tests for ogar.agents.supervisor — state reducers, node functions, routing."""
 
-import pytest
 from langgraph.store.memory import InMemoryStore
 
-from ogar.agents.supervisor.state import (
+from agents.supervisor.state import (
     aggregate_findings_reducer,
-    SupervisorState,
 )
 from langchain_core.messages import AIMessage
 
-from ogar.agents.supervisor.graph import (
+from agents.supervisor.graph import (
     fan_out_to_clusters,
     run_cluster_agent,
     assess_situation,
@@ -22,8 +20,7 @@ from ogar.agents.supervisor.graph import (
     route_after_decide_llm,
     build_supervisor_graph,
 )
-from ogar.agents.cluster.state import AnomalyFinding
-from ogar.transport.schemas import SensorEvent
+from agents.cluster.state import AnomalyFinding
 
 
 def _make_finding(finding_id: str = "f1", cluster_id: str = "c1") -> AnomalyFinding:

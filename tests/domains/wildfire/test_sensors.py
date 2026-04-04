@@ -3,10 +3,9 @@
 import random
 import pytest
 
-from ogar.domains.wildfire.cell_state import FireCellState, FireState
-from ogar.domains.wildfire.environment import FireEnvironmentState
-from ogar.domains.wildfire.physics import FirePhysicsModule
-from ogar.domains.wildfire.sensors import (
+from domains.wildfire.environment import FireEnvironmentState
+from domains.wildfire import FirePhysicsModule
+from domains.wildfire.sensors import (
     BarometricSensor,
     HumiditySensor,
     SmokeSensor,
@@ -14,8 +13,8 @@ from ogar.domains.wildfire.sensors import (
     ThermalCameraSensor,
     WindSensor,
 )
-from ogar.world.generic_engine import GenericWorldEngine
-from ogar.world.generic_grid import GenericTerrainGrid
+from world import GenericWorldEngine
+from world.generic_grid import GenericTerrainGrid
 
 
 @pytest.fixture(autouse=True)

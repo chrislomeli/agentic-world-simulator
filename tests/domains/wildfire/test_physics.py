@@ -3,11 +3,11 @@
 import random
 import pytest
 
-from ogar.domains.wildfire.cell_state import FireCellState, FireState, TerrainType
-from ogar.domains.wildfire.environment import FireEnvironmentState
-from ogar.domains.wildfire.physics import FirePhysicsModule
-from ogar.world.generic_grid import GenericTerrainGrid
-from ogar.world.physics import StateEvent
+from domains.wildfire import FireCellState, FireState, TerrainType
+from domains.wildfire.environment import FireEnvironmentState
+from domains.wildfire import FirePhysicsModule
+from world.generic_grid import GenericTerrainGrid
+from world import StateEvent
 
 
 @pytest.fixture(autouse=True)
@@ -37,7 +37,7 @@ def grid(physics):
 
 class TestFirePhysicsModule:
     def test_is_physics_module_subclass(self):
-        from ogar.world.physics import PhysicsModule
+        from world import PhysicsModule
         assert issubclass(FirePhysicsModule, PhysicsModule)
 
     def test_initial_cell_state(self, physics):

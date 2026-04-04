@@ -2,7 +2,7 @@
 
 import pytest
 
-from ogar.tools.supervisor_tools import (
+from tools.supervisor_tools import (
     _state,
     set_supervisor_tool_state,
     clear_supervisor_tool_state,

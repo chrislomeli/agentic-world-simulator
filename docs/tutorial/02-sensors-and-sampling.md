@@ -53,8 +53,10 @@ All sensors inherit from `SensorBase`, which handles:
 - **Health tracking**: Reporting a confidence score (0.0–1.0)
 
 **What subclasses must implement:**
+
 ```python
-from ogar.sensors.base import SensorBase
+from sensors.base import SensorBase
+
 
 class MyCustomSensor(SensorBase):
     source_type = "my_sensor_type"
@@ -76,15 +78,15 @@ Six sensor types are implemented in `ogar.domains.wildfire.sensors`:
 Reads ambient temperature + heat from nearby fires.
 
 ```python
-from ogar.domains.wildfire.sensors import TemperatureSensor
+from domains.wildfire.sensors import TemperatureSensor
 
 sensor = TemperatureSensor(
     source_id="temp-001",
     cluster_id="cluster-north",
-    engine=engine,          # Reference to GenericWorldEngine
-    grid_row=5,             # Sensor position on grid
+    engine=engine,  # Reference to GenericWorldEngine
+    grid_row=5,  # Sensor position on grid
     grid_col=6,
-    noise_std=0.5           # Gaussian noise (°C)
+    noise_std=0.5  # Gaussian noise (°C)
 )
 
 event = sensor.emit()
@@ -102,7 +104,7 @@ event = sensor.emit()
 Reads relative humidity from the environment.
 
 ```python
-from ogar.domains.wildfire.sensors import HumiditySensor
+from domains.wildfire.sensors import HumiditySensor
 
 sensor = HumiditySensor(
     source_id="humid-001",
@@ -119,14 +121,14 @@ event = sensor.emit()
 Reads wind speed and direction.
 
 ```python
-from ogar.domains.wildfire.sensors import WindSensor
+from domains.wildfire.sensors import WindSensor
 
 sensor = WindSensor(
     source_id="wind-001",
     cluster_id="cluster-north",
     engine=engine,
-    speed_noise_std=0.3,      # m/s
-    direction_noise_std=5.0   # degrees
+    speed_noise_std=0.3,  # m/s
+    direction_noise_std=5.0  # degrees
 )
 
 event = sensor.emit()
@@ -137,7 +139,7 @@ event = sensor.emit()
 Detects smoke based on nearby fire intensity.
 
 ```python
-from ogar.domains.wildfire.sensors import SmokeSensor
+from domains.wildfire.sensors import SmokeSensor
 
 sensor = SmokeSensor(
     source_id="smoke-001",
@@ -161,7 +163,7 @@ event = sensor.emit()
 Reads atmospheric pressure.
 
 ```python
-from ogar.domains.wildfire.sensors import BarometricSensor
+from domains.wildfire.sensors import BarometricSensor
 
 sensor = BarometricSensor(
     source_id="baro-001",
@@ -178,7 +180,7 @@ event = sensor.emit()
 Reads a heat grid from a rectangular region.
 
 ```python
-from ogar.domains.wildfire.sensors import ThermalCameraSensor
+from domains.wildfire.sensors import ThermalCameraSensor
 
 sensor = ThermalCameraSensor(
     source_id="thermal-001",
@@ -186,7 +188,7 @@ sensor = ThermalCameraSensor(
     engine=engine,
     top_row=3,
     left_col=3,
-    view_rows=4,    # 4×4 grid view
+    view_rows=4,  # 4×4 grid view
     view_cols=4,
     noise_std=1.0
 )
@@ -254,7 +256,7 @@ SensorEvent(
 Real sensors fail in predictable ways. The `FailureMode` enum lets you inject failures:
 
 ```python
-from ogar.sensors.base import FailureMode
+from sensors.base import FailureMode
 
 sensor.set_failure_mode(FailureMode.STUCK)
 # → sensor.emit() returns the same reading every time
@@ -286,8 +288,8 @@ The **SensorPublisher** is an async loop that:
 4. Repeats
 
 ```python
-from ogar.sensors.publisher import SensorPublisher
-from ogar.transport.queue import SensorEventQueue
+from sensors import SensorPublisher
+from transport import SensorEventQueue
 
 # Create sensors
 temp_sensor = TemperatureSensor(...)
@@ -301,7 +303,7 @@ publisher = SensorPublisher(
     sensors=[temp_sensor, smoke_sensor],
     queue=queue,
     tick_interval_seconds=1.0,  # Tick every second
-    engine=engine               # Optional: auto-tick the world
+    engine=engine  # Optional: auto-tick the world
 )
 
 # Run forever
@@ -352,14 +354,14 @@ sensor = TemperatureSensor(
 
 ```python
 import random
-from ogar.domains.wildfire.scenarios import create_basic_wildfire
-from ogar.domains.wildfire.sensors import (
+from domains.wildfire import create_basic_wildfire
+from domains.wildfire.sensors import (
     TemperatureSensor,
     SmokeSensor,
     WindSensor,
 )
-from ogar.sensors.publisher import SensorPublisher
-from ogar.transport.queue import SensorEventQueue
+from sensors import SensorPublisher
+from transport import SensorEventQueue
 
 # 1. Create the world
 random.seed(42)
@@ -472,8 +474,9 @@ Now that you understand sensors, the next tutorial will cover:
 ## Quick Reference
 
 ### Create a sensor
+
 ```python
-from ogar.domains.wildfire.sensors import TemperatureSensor
+from domains.wildfire.sensors import TemperatureSensor
 
 sensor = TemperatureSensor(
     source_id="temp-001",
@@ -492,8 +495,9 @@ event = sensor.emit()
 ```
 
 ### Set a failure mode
+
 ```python
-from ogar.sensors.base import FailureMode
+from sensors.base import FailureMode
 
 sensor.set_failure_mode(FailureMode.STUCK)
 sensor.set_failure_mode(FailureMode.DROPOUT)
@@ -501,9 +505,10 @@ sensor.set_failure_mode(FailureMode.NORMAL)
 ```
 
 ### Run the publisher
+
 ```python
-from ogar.sensors.publisher import SensorPublisher
-from ogar.transport.queue import SensorEventQueue
+from sensors import SensorPublisher
+from transport import SensorEventQueue
 
 queue = SensorEventQueue()
 publisher = SensorPublisher(
