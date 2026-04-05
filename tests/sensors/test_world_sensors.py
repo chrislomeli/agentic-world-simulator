@@ -92,18 +92,18 @@ class TestTemperatureSensor:
 
 class TestHumiditySensor:
     def test_returns_sensor_event(self, sensor_engine):
-        s = HumiditySensor(source_id="hum-1", cluster_id="c1", engine=sensor_engine)
+        s = HumiditySensor(source_id="hum-1", cluster_id="c1", engine=sensor_engine, grid_row=2, grid_col=2)
         event = s.emit()
         assert isinstance(event, SensorEvent)
         assert event.source_type == "humidity"
 
     def test_payload_has_humidity_pct(self, sensor_engine):
-        s = HumiditySensor(source_id="hum-1", cluster_id="c1", engine=sensor_engine, noise_std=0.0)
+        s = HumiditySensor(source_id="hum-1", cluster_id="c1", engine=sensor_engine, grid_row=2, grid_col=2, noise_std=0.0)
         event = s.emit()
         assert "relative_humidity_pct" in event.payload
 
     def test_close_to_weather_humidity(self, sensor_engine):
-        s = HumiditySensor(source_id="hum-1", cluster_id="c1", engine=sensor_engine, noise_std=0.0)
+        s = HumiditySensor(source_id="hum-1", cluster_id="c1", engine=sensor_engine, grid_row=2, grid_col=2, noise_std=0.0)
         event = s.emit()
         assert abs(event.payload["relative_humidity_pct"] - 50.0) < 2.0
 
@@ -112,7 +112,7 @@ class TestHumiditySensor:
 
 class TestWindSensor:
     def test_returns_sensor_event(self, sensor_engine):
-        s = WindSensor(source_id="wind-1", cluster_id="c1", engine=sensor_engine)
+        s = WindSensor(source_id="wind-1", cluster_id="c1", engine=sensor_engine, grid_row=2, grid_col=2)
         event = s.emit()
         assert isinstance(event, SensorEvent)
         assert event.source_type == "wind"
@@ -120,7 +120,7 @@ class TestWindSensor:
     def test_payload_has_speed_and_direction(self, sensor_engine):
         s = WindSensor(
             source_id="wind-1", cluster_id="c1", engine=sensor_engine,
-            speed_noise_std=0.0, direction_noise_std=0.0,
+            grid_row=2, grid_col=2, speed_noise_std=0.0, direction_noise_std=0.0,
         )
         event = s.emit()
         assert "speed_mps" in event.payload
@@ -162,13 +162,13 @@ class TestSmokeSensor:
 
 class TestBarometricSensor:
     def test_returns_sensor_event(self, sensor_engine):
-        s = BarometricSensor(source_id="baro-1", cluster_id="c1", engine=sensor_engine)
+        s = BarometricSensor(source_id="baro-1", cluster_id="c1", engine=sensor_engine, grid_row=2, grid_col=2)
         event = s.emit()
         assert isinstance(event, SensorEvent)
         assert event.source_type == "barometric_pressure"
 
     def test_payload_has_pressure(self, sensor_engine):
-        s = BarometricSensor(source_id="baro-1", cluster_id="c1", engine=sensor_engine, noise_std=0.0)
+        s = BarometricSensor(source_id="baro-1", cluster_id="c1", engine=sensor_engine, grid_row=2, grid_col=2, noise_std=0.0)
         event = s.emit()
         assert "pressure_hpa" in event.payload
         assert abs(event.payload["pressure_hpa"] - 1013.0) < 2.0

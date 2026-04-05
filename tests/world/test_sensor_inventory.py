@@ -12,11 +12,22 @@ class StubSensor(SensorBase):
     """Trivial sensor that returns a fixed reading."""
     source_type = "stub"
 
-    def __init__(self, source_id: str, cluster_id: str = "cluster-test"):
-        super().__init__(source_id=source_id, cluster_id=cluster_id)
+    def __init__(self, source_id: str, cluster_id: str = "cluster-test", **kwargs):
+        super().__init__(source_id=source_id, cluster_id=cluster_id, **kwargs)
 
     def read(self):
         return {"value": 42}
+
+
+class StubSensorB(SensorBase):
+    """Second sensor type for layer tests."""
+    source_type = "stub_b"
+
+    def __init__(self, source_id: str, cluster_id: str = "cluster-test", **kwargs):
+        super().__init__(source_id=source_id, cluster_id=cluster_id, **kwargs)
+
+    def read(self):
+        return {"value": 99}
 
 
 # ── Fixtures ─────────────────────────────────────────────────────────────────
@@ -214,3 +225,91 @@ class TestRepr:
         r = repr(inventory)
         assert "SensorInventory" in r
         assert "5×5" in r
+
+
+# ── Auto-registration tests ─────────────────────────────────────────────────
+
+class TestRegisterAuto:
+    def test_register_auto(self, inventory):
+        s = StubSensor(source_id="s1", grid_row=2, grid_col=3)
+        inventory.register_auto(s)
+        assert inventory.get_position("s1") == (2, 3)
+
+    def test_register_auto_no_location_raises(self, inventory):
+        s = StubSensor(source_id="s1")
+        with pytest.raises(ValueError, match="no grid location"):
+            inventory.register_auto(s)
+
+
+# ── Layer tests ─────────────────────────────────────────────────────────────
+
+class TestLayers:
+    def test_layer_types(self, inventory):
+        inventory.register(StubSensor(source_id="s1"), row=0, col=0)
+        inventory.register(StubSensorB(source_id="b1"), row=1, col=1)
+        assert inventory.layer_types() == {"stub", "stub_b"}
+
+    def test_layer_types_empty(self, inventory):
+        assert inventory.layer_types() == set()
+
+    def test_get_layer(self, inventory):
+        inventory.register(StubSensor(source_id="s1"), row=0, col=0)
+        inventory.register(StubSensor(source_id="s2"), row=1, col=1)
+        inventory.register(StubSensorB(source_id="b1"), row=2, col=2)
+
+        layer = inventory.get_layer("stub")
+        assert layer == {"s1": (0, 0), "s2": (1, 1)}
+
+    def test_get_layer_empty(self, inventory):
+        assert inventory.get_layer("nonexistent") == {}
+
+    def test_layer_positions(self, inventory):
+        inventory.register(StubSensor(source_id="s1"), row=0, col=0)
+        inventory.register(StubSensor(source_id="s2"), row=1, col=1)
+        assert inventory.layer_positions("stub") == {(0, 0), (1, 1)}
+
+    def test_all_layer_positions(self, inventory):
+        inventory.register(StubSensor(source_id="s1"), row=0, col=0)
+        inventory.register(StubSensorB(source_id="b1"), row=2, col=2)
+        result = inventory.all_layer_positions()
+        assert result == {"stub": {(0, 0)}, "stub_b": {(2, 2)}}
+
+    def test_layer_coverage_ratio(self, inventory):
+        # 5x5 = 25 cells, 2 stub sensors at unique positions = 8%
+        inventory.register(StubSensor(source_id="s1"), row=0, col=0)
+        inventory.register(StubSensor(source_id="s2"), row=1, col=1)
+        assert inventory.layer_coverage_ratio("stub") == pytest.approx(2 / 25)
+        assert inventory.layer_coverage_ratio("stub_b") == 0.0
+
+    def test_unregister_updates_type_index(self, inventory):
+        inventory.register(StubSensor(source_id="s1"), row=0, col=0)
+        inventory.register(StubSensor(source_id="s2"), row=1, col=1)
+        inventory.unregister("s1")
+        assert inventory.get_layer("stub") == {"s2": (1, 1)}
+
+    def test_unregister_last_of_type_removes_layer(self, inventory):
+        inventory.register(StubSensor(source_id="s1"), row=0, col=0)
+        inventory.unregister("s1")
+        assert "stub" not in inventory.layer_types()
+
+
+class TestLayerExperiments:
+    def test_thin_layer(self, inventory):
+        for i in range(6):
+            inventory.register(StubSensor(source_id=f"s{i}"), row=i % 5, col=i // 5)
+        inventory.register(StubSensorB(source_id="b1"), row=4, col=4)
+
+        removed = inventory.thin_layer("stub", keep_fraction=0.5)
+        assert len(removed) == 3
+        # StubSensorB should be untouched
+        assert inventory.get_sensor("b1") is not None
+
+    def test_inject_layer_failure(self, inventory):
+        for i in range(4):
+            inventory.register(StubSensor(source_id=f"s{i}"), row=i, col=0)
+        inventory.register(StubSensorB(source_id="b1"), row=4, col=0)
+
+        affected = inventory.inject_layer_failure("stub", FailureMode.STUCK, fraction=0.5)
+        assert len(affected) == 2
+        # StubSensorB should remain NORMAL
+        assert inventory.get_sensor("b1")._failure_mode == FailureMode.NORMAL

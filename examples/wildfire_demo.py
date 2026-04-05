@@ -31,6 +31,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from world import create_basic_wildfire
+from world.sensor_inventory import SensorInventory
 from sensors import (
     TemperatureSensor,
     HumiditySensor,
@@ -101,17 +102,21 @@ def run_demo():
         cluster_id="cluster-south",
     )
 
-    # Humidity sensor — reads global weather humidity.
+    # Humidity sensor at (6, 5) — reads global weather humidity.
     humidity_sensor = HumiditySensor(
         engine=engine,
+        grid_row=6,
+        grid_col=5,
         noise_std=1.0,
         source_id="humidity-south",
         cluster_id="cluster-south",
     )
 
-    # Wind sensor — reads global wind speed and direction.
+    # Wind sensor at (6, 6) — reads global wind speed and direction.
     wind_sensor = WindSensor(
         engine=engine,
+        grid_row=6,
+        grid_col=6,
         speed_noise_std=0.3,
         direction_noise_std=3.0,
         source_id="wind-south",
@@ -129,9 +134,11 @@ def run_demo():
         cluster_id="cluster-south",
     )
 
-    # Barometric pressure — reads global weather pressure.
+    # Barometric pressure at (6, 7) — reads global weather pressure.
     baro_sensor = BarometricSensor(
         engine=engine,
+        grid_row=6,
+        grid_col=7,
         noise_std=0.3,
         source_id="baro-south",
         cluster_id="cluster-south",
@@ -149,7 +156,15 @@ def run_demo():
         cluster_id="cluster-south",
     )
 
-    sensors = [temp_sensor, humidity_sensor, wind_sensor, smoke_sensor, baro_sensor, thermal_camera]
+    # ── Register all sensors in the inventory ──────────────────────
+    inventory = SensorInventory(
+        grid_rows=engine.grid.rows,
+        grid_cols=engine.grid.cols,
+    )
+    for sensor in [temp_sensor, humidity_sensor, wind_sensor, smoke_sensor, baro_sensor, thermal_camera]:
+        inventory.register_auto(sensor)
+
+    sensors = inventory.all_sensors()
 
     # ── Run the simulation ────────────────────────────────────────
     print("=" * 70)

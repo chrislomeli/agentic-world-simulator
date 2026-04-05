@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "world-simulator"
@@ -45,8 +45,8 @@ dev = [
 [project.urls]
 Homepage = "https://github.com/chrislomeli/world-simulator"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.hatch.build.targets.wheel]
+packages = ["src/sensors", "src/tools", "src/domains", "src/transport", "src/bridge", "src/world", "src/agents"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

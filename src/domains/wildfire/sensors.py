@@ -61,10 +61,8 @@ class TemperatureSensor(SensorBase):
         noise_std: float = 0.5,
         **kwargs,
     ) -> None:
-        super().__init__(**kwargs)
+        super().__init__(grid_row=grid_row, grid_col=grid_col, **kwargs)
         self._engine = engine
-        self._grid_row = grid_row
-        self._grid_col = grid_col
         self._noise_std = noise_std
 
     def read(self) -> Dict[str, Any]:
@@ -73,12 +71,12 @@ class TemperatureSensor(SensorBase):
 
         # Heat from nearby burning cells.
         heat_boost = 0.0
-        for nr, nc in self._engine.grid.neighbors(self._grid_row, self._grid_col):
+        for nr, nc in self._engine.grid.neighbors(self.grid_row, self.grid_col):
             neighbor = self._engine.grid.get_cell(nr, nc)
             if neighbor.cell_state.fire_state == FireState.BURNING:
                 heat_boost += neighbor.cell_state.fire_intensity * 15.0
 
-        own_cell = self._engine.grid.get_cell(self._grid_row, self._grid_col)
+        own_cell = self._engine.grid.get_cell(self.grid_row, self.grid_col)
         if own_cell.cell_state.fire_state == FireState.BURNING:
             heat_boost += own_cell.cell_state.fire_intensity * 40.0
 
@@ -93,6 +91,10 @@ class HumiditySensor(SensorBase):
     """
     Reads relative humidity from the environment.
 
+    The sensor has a grid location (it's a physical device) but reads
+    global environment humidity — the environment model doesn't have
+    per-cell humidity variation.
+
     Real-world reference:
       Standard hygrometers report 0–100% RH.
       Below 20% is extreme fire danger.
@@ -104,10 +106,12 @@ class HumiditySensor(SensorBase):
         self,
         *,
         engine: GenericWorldEngine[FireCellState],
+        grid_row: int,
+        grid_col: int,
         noise_std: float = 1.0,
         **kwargs,
     ) -> None:
-        super().__init__(**kwargs)
+        super().__init__(grid_row=grid_row, grid_col=grid_col, **kwargs)
         self._engine = engine
         self._noise_std = noise_std
 
@@ -124,6 +128,10 @@ class WindSensor(SensorBase):
     """
     Reads wind speed and direction from the environment.
 
+    The sensor has a grid location (it's a physical device) but reads
+    global environment wind — the environment model doesn't have
+    per-cell wind variation.
+
     Real-world reference:
       Anemometers report wind speed (m/s) and direction (°).
     """
@@ -134,11 +142,13 @@ class WindSensor(SensorBase):
         self,
         *,
         engine: GenericWorldEngine[FireCellState],
+        grid_row: int,
+        grid_col: int,
         speed_noise_std: float = 0.3,
         direction_noise_std: float = 3.0,
         **kwargs,
     ) -> None:
-        super().__init__(**kwargs)
+        super().__init__(grid_row=grid_row, grid_col=grid_col, **kwargs)
         self._engine = engine
         self._speed_noise_std = speed_noise_std
         self._direction_noise_std = direction_noise_std
@@ -180,10 +190,8 @@ class SmokeSensor(SensorBase):
         noise_std: float = 2.0,
         **kwargs,
     ) -> None:
-        super().__init__(**kwargs)
+        super().__init__(grid_row=grid_row, grid_col=grid_col, **kwargs)
         self._engine = engine
-        self._grid_row = grid_row
-        self._grid_col = grid_col
         self._noise_std = noise_std
 
     def read(self) -> Dict[str, Any]:
@@ -198,8 +206,8 @@ class SmokeSensor(SensorBase):
             if cell.cell_state.fire_state != FireState.BURNING:
                 continue
 
-            dr = self._grid_row - cell.row
-            dc = self._grid_col - cell.col
+            dr = self.grid_row - cell.row
+            dc = self.grid_col - cell.col
             dist = math.sqrt(dr * dr + dc * dc)
             if dist == 0:
                 dist = 0.5
@@ -241,10 +249,12 @@ class BarometricSensor(SensorBase):
         self,
         *,
         engine: GenericWorldEngine[FireCellState],
+        grid_row: int,
+        grid_col: int,
         noise_std: float = 0.3,
         **kwargs,
     ) -> None:
-        super().__init__(**kwargs)
+        super().__init__(grid_row=grid_row, grid_col=grid_col, **kwargs)
         self._engine = engine
         self._noise_std = noise_std
 
@@ -281,7 +291,7 @@ class ThermalCameraSensor(SensorBase):
         noise_std: float = 1.0,
         **kwargs,
     ) -> None:
-        super().__init__(**kwargs)
+        super().__init__(grid_row=top_row, grid_col=left_col, **kwargs)
         self._engine = engine
         self._top_row = top_row
         self._left_col = left_col

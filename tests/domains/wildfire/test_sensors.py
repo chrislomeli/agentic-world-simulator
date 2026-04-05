@@ -71,22 +71,37 @@ class TestTemperatureSensor:
 class TestHumiditySensor:
     def test_reads_humidity(self, fire_engine):
         sensor = HumiditySensor(
-            engine=fire_engine, noise_std=0.0,
+            engine=fire_engine, grid_row=2, grid_col=2, noise_std=0.0,
             source_id="hum-1", cluster_id="c1",
         )
         reading = sensor.read()
         assert reading["relative_humidity_pct"] == pytest.approx(20.0, abs=1.0)
 
+    def test_has_location(self, fire_engine):
+        sensor = HumiditySensor(
+            engine=fire_engine, grid_row=1, grid_col=3, noise_std=0.0,
+            source_id="hum-2", cluster_id="c1",
+        )
+        assert sensor.location == (1, 3)
+
 
 class TestWindSensor:
     def test_reads_wind(self, fire_engine):
         sensor = WindSensor(
-            engine=fire_engine, speed_noise_std=0.0, direction_noise_std=0.0,
+            engine=fire_engine, grid_row=2, grid_col=2,
+            speed_noise_std=0.0, direction_noise_std=0.0,
             source_id="wind-1", cluster_id="c1",
         )
         reading = sensor.read()
         assert reading["speed_mps"] == pytest.approx(5.0, abs=0.5)
         assert "direction_deg" in reading
+
+    def test_has_location(self, fire_engine):
+        sensor = WindSensor(
+            engine=fire_engine, grid_row=3, grid_col=1,
+            source_id="wind-2", cluster_id="c1",
+        )
+        assert sensor.location == (3, 1)
 
 
 class TestSmokeSensor:
@@ -114,11 +129,18 @@ class TestSmokeSensor:
 class TestBarometricSensor:
     def test_reads_pressure(self, fire_engine):
         sensor = BarometricSensor(
-            engine=fire_engine, noise_std=0.0,
+            engine=fire_engine, grid_row=2, grid_col=2, noise_std=0.0,
             source_id="baro-1", cluster_id="c1",
         )
         reading = sensor.read()
         assert reading["pressure_hpa"] == pytest.approx(1013.0, abs=1.0)
+
+    def test_has_location(self, fire_engine):
+        sensor = BarometricSensor(
+            engine=fire_engine, grid_row=4, grid_col=0, noise_std=0.0,
+            source_id="baro-2", cluster_id="c1",
+        )
+        assert sensor.location == (4, 0)
 
 
 class TestThermalCameraSensor:

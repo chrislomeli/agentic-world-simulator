@@ -388,6 +388,8 @@ def build_cluster_agent_graph(
           "error_message": None,
       })
     """
+    # todo - this is not using any of the InstrumentedGraph design
+    # todo - and is proabaly not using the tool registry either
     builder = StateGraph(ClusterAgentState)
 
     builder.add_node("ingest_events", ingest_events)

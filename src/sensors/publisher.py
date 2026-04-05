@@ -50,6 +50,7 @@ from transport.queue import SensorEventQueue
 
 if TYPE_CHECKING:
     from world.generic_engine import GenericWorldEngine
+    from world.sensor_inventory import SensorInventory
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,8 @@ class SensorPublisher:
     def __init__(
         self,
         *,
-        sensors: List[SensorBase],
+        sensors: Optional[List[SensorBase]] = None,
+        inventory: Optional["SensorInventory"] = None,
         queue: SensorEventQueue,
         tick_interval_seconds: float = 1.0,
         engine: Optional["GenericWorldEngine"] = None,
@@ -80,6 +82,11 @@ class SensorPublisher:
         ──────────
         sensors               : List of sensors to tick each interval.
                                 All must be SensorBase subclasses.
+                                Ignored when inventory is provided.
+        inventory             : Optional SensorInventory.  When provided,
+                                the publisher iterates inventory.all_sensors()
+                                each tick — this is live, so thinning or adding
+                                sensors between ticks takes effect immediately.
         queue                 : The event queue to put events onto.
                                 The bridge consumer reads from the other end.
         tick_interval_seconds : How long to wait between tick cycles.
@@ -90,7 +97,10 @@ class SensorPublisher:
                                 each sensor pass, advancing the simulation
                                 so sensors read fresh world state.
         """
+        if inventory is None and sensors is None:
+            raise ValueError("Provide either sensors or inventory")
         self._sensors = sensors
+        self._inventory = inventory
         self._queue = queue
         self._tick_interval = tick_interval_seconds
         self._engine = engine
@@ -130,9 +140,13 @@ class SensorPublisher:
         self._stop_requested = False
         self.ticks_completed = 0
 
+        sensor_count = (
+            self._inventory.size if self._inventory is not None
+            else len(self._sensors)
+        )
         logger.info(
             "SensorPublisher starting — %d sensor(s), %.2fs interval, limit=%s",
-            len(self._sensors),
+            sensor_count,
             self._tick_interval,
             ticks if ticks is not None else "∞",
         )
@@ -156,7 +170,12 @@ class SensorPublisher:
                 )
 
             # ── Tick all sensors ────────────────────────────────────────
-            for sensor in self._sensors:
+            active_sensors = (
+                self._inventory.all_sensors()
+                if self._inventory is not None
+                else self._sensors
+            )
+            for sensor in active_sensors:
                 event = sensor.emit()
 
                 if event is None:

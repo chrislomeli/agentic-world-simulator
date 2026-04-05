@@ -50,7 +50,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, Tuple
 
 from transport.schemas import SensorEvent
 
@@ -103,6 +103,8 @@ class SensorBase(ABC):
         *,
         source_id: str,
         cluster_id: str,
+        grid_row: Optional[int] = None,
+        grid_col: Optional[int] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
@@ -112,12 +114,17 @@ class SensorBase(ABC):
                       Should be unique within the system. e.g. "temp-A1".
         cluster_id  : Which cluster (and therefore which Kafka topic and
                       cluster agent) this sensor belongs to.
+        grid_row    : Row position on the world grid.  Every sensor is a
+                      physical device with a location.
+        grid_col    : Column position on the world grid.
         metadata    : Optional dict passed through to every SensorEvent
                       this sensor emits.  Good place for static context
                       like geo-coordinates or hardware version.
         """
         self.source_id = source_id
         self.cluster_id = cluster_id
+        self.grid_row = grid_row
+        self.grid_col = grid_col
         self.metadata = metadata or {}
 
         # Simulation tick — incremented each time emit() is called.
@@ -129,6 +136,15 @@ class SensorBase(ABC):
 
         # Stuck-mode cache: the last real reading, held frozen when stuck.
         self._stuck_payload: Optional[Dict[str, Any]] = None
+
+    # ── Location ──────────────────────────────────────────────────────────────
+
+    @property
+    def location(self) -> Optional[Tuple[int, int]]:
+        """Return (grid_row, grid_col) or None if the sensor has no position."""
+        if self.grid_row is not None and self.grid_col is not None:
+            return (self.grid_row, self.grid_col)
+        return None
 
     # ── Abstract interface ────────────────────────────────────────────────────
 
@@ -242,6 +258,15 @@ class SensorBase(ABC):
             # TODO: apply drift offset and spike injection here in a later
             # iteration once scenario scripts are built out.
 
+        # Inject grid location into metadata so downstream consumers
+        # can see where this reading came from without changing the
+        # SensorEvent schema.
+        event_metadata = dict(self.metadata)
+        if self.grid_row is not None:
+            event_metadata["grid_row"] = self.grid_row
+        if self.grid_col is not None:
+            event_metadata["grid_col"] = self.grid_col
+
         return SensorEvent.create(
             source_id=self.source_id,
             source_type=self.source_type,
@@ -249,7 +274,7 @@ class SensorBase(ABC):
             payload=payload,
             confidence=self.health(),
             sim_tick=tick,
-            metadata=self.metadata,
+            metadata=event_metadata,
         )
 
     # ── Repr ──────────────────────────────────────────────────────────────────

@@ -32,7 +32,7 @@ from __future__ import annotations
 
 import logging
 import random
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Optional, Set, Tuple
 
 from sensors.base import FailureMode, SensorBase
 from transport.schemas import SensorEvent
@@ -66,6 +66,7 @@ class SensorInventory:
         self._grid_cols = grid_cols
         self._sensors: Dict[str, SensorBase] = {}          # source_id → sensor
         self._positions: Dict[str, Tuple[int, int]] = {}   # source_id → (row, col)
+        self._type_index: Dict[str, Set[str]] = {}         # source_type → {source_ids}
 
     # ── Registration ─────────────────────────────────────────────────────────
 
@@ -88,6 +89,7 @@ class SensorInventory:
             )
         self._sensors[sensor.source_id] = sensor
         self._positions[sensor.source_id] = (row, col)
+        self._type_index.setdefault(sensor.source_type, set()).add(sensor.source_id)
         logger.debug(
             "Registered sensor %s (%s) at (%d, %d)",
             sensor.source_id, sensor.source_type, row, col,
@@ -102,6 +104,11 @@ class SensorInventory:
         """
         sensor = self._sensors.pop(source_id)
         self._positions.pop(source_id)
+        type_set = self._type_index.get(sensor.source_type)
+        if type_set is not None:
+            type_set.discard(source_id)
+            if not type_set:
+                del self._type_index[sensor.source_type]
         logger.debug("Unregistered sensor %s", source_id)
         return sensor
 
@@ -131,6 +138,113 @@ class SensorInventory:
     def size(self) -> int:
         """Number of registered sensors."""
         return len(self._sensors)
+
+    # ── Auto-registration ─────────────────────────────────────────────────────
+
+    def register_auto(self, sensor: SensorBase) -> None:
+        """
+        Register a sensor using its own grid_row/grid_col attributes.
+
+        Raises ValueError if the sensor has no location set.
+        """
+        if sensor.grid_row is None or sensor.grid_col is None:
+            raise ValueError(
+                f"Sensor {sensor.source_id!r} has no grid location — "
+                f"set grid_row and grid_col before calling register_auto()"
+            )
+        self.register(sensor, row=sensor.grid_row, col=sensor.grid_col)
+
+    # ── Layer queries ───────────────────────────────────────────────────────
+
+    def layer_types(self) -> Set[str]:
+        """Return the set of distinct source_type values currently registered."""
+        return set(self._type_index.keys())
+
+    def get_layer(self, source_type: str) -> Dict[str, Tuple[int, int]]:
+        """
+        Return all sensors of a given type as {source_id: (row, col)}.
+
+        Returns an empty dict if no sensors of that type exist.
+        """
+        sids = self._type_index.get(source_type, set())
+        return {sid: self._positions[sid] for sid in sids}
+
+    def layer_positions(self, source_type: str) -> Set[Tuple[int, int]]:
+        """Return the set of (row, col) positions occupied by a sensor type."""
+        sids = self._type_index.get(source_type, set())
+        return {self._positions[sid] for sid in sids}
+
+    def all_layer_positions(self) -> Dict[str, Set[Tuple[int, int]]]:
+        """Return {source_type: {(row, col), ...}} for every registered type."""
+        return {
+            stype: self.layer_positions(stype)
+            for stype in self._type_index
+        }
+
+    def layer_coverage_ratio(self, source_type: str) -> float:
+        """
+        Fraction of grid cells covered by sensors of a specific type.
+
+        Returns 0.0–1.0.
+        """
+        total_cells = self._grid_rows * self._grid_cols
+        if total_cells == 0:
+            return 0.0
+        return len(self.layer_positions(source_type)) / total_cells
+
+    # ── Layer experimental knobs ────────────────────────────────────────────
+
+    def thin_layer(self, source_type: str, keep_fraction: float) -> List[str]:
+        """
+        Randomly remove sensors of a specific type.
+
+        Returns the source_ids of removed sensors.
+        """
+        if not (0.0 <= keep_fraction <= 1.0):
+            raise ValueError(f"keep_fraction must be 0.0–1.0, got {keep_fraction}")
+
+        sids = list(self._type_index.get(source_type, set()))
+        keep_count = max(0, int(len(sids) * keep_fraction))
+        keep_ids = set(random.sample(sids, min(keep_count, len(sids))))
+
+        removed = []
+        for sid in sids:
+            if sid not in keep_ids:
+                self.unregister(sid)
+                removed.append(sid)
+
+        logger.info(
+            "Thinned layer %r: kept %d/%d sensors, removed %d",
+            source_type, len(sids) - len(removed), len(sids), len(removed),
+        )
+        return removed
+
+    def inject_layer_failure(
+        self,
+        source_type: str,
+        mode: FailureMode,
+        fraction: float = 1.0,
+    ) -> List[str]:
+        """
+        Apply a failure mode to a fraction of sensors in a specific layer.
+
+        Returns the source_ids of affected sensors.
+        """
+        if not (0.0 <= fraction <= 1.0):
+            raise ValueError(f"fraction must be 0.0–1.0, got {fraction}")
+
+        sids = list(self._type_index.get(source_type, set()))
+        count = max(0, int(len(sids) * fraction))
+        targets = random.sample(sids, min(count, len(sids)))
+
+        for sid in targets:
+            self._sensors[sid].set_failure_mode(mode)
+
+        logger.info(
+            "Injected %s failure on %d/%d %s sensors",
+            mode.value, len(targets), len(sids), source_type,
+        )
+        return targets
 
     # ── Coverage analysis ────────────────────────────────────────────────────
 
@@ -173,8 +287,7 @@ class SensorInventory:
         removed = []
         for sid in all_ids:
             if sid not in keep_ids:
-                self._sensors.pop(sid)
-                self._positions.pop(sid)
+                self.unregister(sid)
                 removed.append(sid)
 
         logger.info(

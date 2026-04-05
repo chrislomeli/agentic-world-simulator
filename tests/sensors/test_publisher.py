@@ -8,6 +8,7 @@ from sensors.base import SensorBase, FailureMode
 from sensors import SensorPublisher
 from transport import SensorEventQueue
 from transport import SensorEvent
+from world import SensorInventory
 
 
 class _FakeSensor(SensorBase):
@@ -104,3 +105,24 @@ class TestSensorPublisher:
         )
         await pub.run(ticks=5)
         assert event_queue.qsize() == 5
+
+    @pytest.mark.asyncio
+    async def test_inventory_based(self, event_queue):
+        inv = SensorInventory(grid_rows=5, grid_cols=5)
+        s1 = _FakeSensor(source_id="f1", cluster_id="c1", grid_row=0, grid_col=0)
+        s2 = _FakeSensor(source_id="f2", cluster_id="c1", grid_row=1, grid_col=1)
+        inv.register_auto(s1)
+        inv.register_auto(s2)
+
+        pub = SensorPublisher(
+            inventory=inv,
+            queue=event_queue,
+            tick_interval_seconds=0.0,
+        )
+        await pub.run(ticks=3)
+        assert event_queue.qsize() == 6  # 2 sensors × 3 ticks
+
+    @pytest.mark.asyncio
+    async def test_no_sensors_or_inventory_raises(self, event_queue):
+        with pytest.raises(ValueError, match="Provide either"):
+            SensorPublisher(queue=event_queue)
