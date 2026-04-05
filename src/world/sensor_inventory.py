@@ -19,7 +19,7 @@ anything else.
 
 Placement model
 ───────────────
-Each sensor is placed at a specific (row, col) on the grid.
+Each sensor is placed at a specific (row, col, layer) on the grid.
 Multiple sensors can occupy the same cell (e.g. a temperature
 sensor and a smoke sensor co-located).
 
@@ -55,22 +55,24 @@ class SensorInventory:
       inventory.inject_bulk_failure(FailureMode.DRIFT, fraction=0.2)
     """
 
-    def __init__(self, grid_rows: int, grid_cols: int) -> None:
+    def __init__(self, grid_rows: int, grid_cols: int, grid_layers: int = 1) -> None:
         """
         Parameters
         ──────────
-        grid_rows : number of rows in the grid (for coverage calculations)
-        grid_cols : number of columns in the grid
+        grid_rows   : number of rows in the grid (for coverage calculations)
+        grid_cols   : number of columns in the grid
+        grid_layers : number of vertical layers (default 1)
         """
         self._grid_rows = grid_rows
         self._grid_cols = grid_cols
-        self._sensors: Dict[str, SensorBase] = {}          # source_id → sensor
-        self._positions: Dict[str, Tuple[int, int]] = {}   # source_id → (row, col)
-        self._type_index: Dict[str, Set[str]] = {}         # source_type → {source_ids}
+        self._grid_layers = grid_layers
+        self._sensors: Dict[str, SensorBase] = {}                    # source_id → sensor
+        self._positions: Dict[str, Tuple[int, int, int]] = {}        # source_id → (row, col, layer)
+        self._type_index: Dict[str, Set[str]] = {}                   # source_type → {source_ids}
 
     # ── Registration ─────────────────────────────────────────────────────────
 
-    def register(self, sensor: SensorBase, row: int, col: int) -> None:
+    def register(self, sensor: SensorBase, row: int, col: int, layer: int = 0) -> None:
         """
         Add a sensor to the inventory at a specific grid position.
 
@@ -82,17 +84,18 @@ class SensorInventory:
             raise ValueError(
                 f"Sensor {sensor.source_id!r} is already registered"
             )
-        if not (0 <= row < self._grid_rows and 0 <= col < self._grid_cols):
+        if not (0 <= row < self._grid_rows and 0 <= col < self._grid_cols
+                and 0 <= layer < self._grid_layers):
             raise ValueError(
-                f"Position ({row}, {col}) out of bounds for grid "
-                f"({self._grid_rows}×{self._grid_cols})"
+                f"Position ({row}, {col}, {layer}) out of bounds for grid "
+                f"({self._grid_rows}×{self._grid_cols}×{self._grid_layers})"
             )
         self._sensors[sensor.source_id] = sensor
-        self._positions[sensor.source_id] = (row, col)
+        self._positions[sensor.source_id] = (row, col, layer)
         self._type_index.setdefault(sensor.source_type, set()).add(sensor.source_id)
         logger.debug(
-            "Registered sensor %s (%s) at (%d, %d)",
-            sensor.source_id, sensor.source_type, row, col,
+            "Registered sensor %s (%s) at (%d, %d, %d)",
+            sensor.source_id, sensor.source_type, row, col, layer,
         )
 
     def unregister(self, source_id: str) -> SensorBase:
@@ -118,16 +121,16 @@ class SensorInventory:
         """Get a sensor by its source_id. Raises KeyError if not found."""
         return self._sensors[source_id]
 
-    def get_position(self, source_id: str) -> Tuple[int, int]:
-        """Get the (row, col) position of a sensor. Raises KeyError if not found."""
+    def get_position(self, source_id: str) -> Tuple[int, int, int]:
+        """Get the (row, col, layer) position of a sensor. Raises KeyError if not found."""
         return self._positions[source_id]
 
-    def get_sensors_at(self, row: int, col: int) -> List[SensorBase]:
+    def get_sensors_at(self, row: int, col: int, layer: int = 0) -> List[SensorBase]:
         """Return all sensors placed at the given grid position."""
         return [
             sensor
             for sid, sensor in self._sensors.items()
-            if self._positions[sid] == (row, col)
+            if self._positions[sid] == (row, col, layer)
         ]
 
     def all_sensors(self) -> List[SensorBase]:
@@ -143,16 +146,18 @@ class SensorInventory:
 
     def register_auto(self, sensor: SensorBase) -> None:
         """
-        Register a sensor using its own grid_row/grid_col attributes.
+        Register a sensor using its own grid_row/grid_col/grid_layer attributes.
 
         Raises ValueError if the sensor has no location set.
+        grid_layer defaults to 0 if not set on the sensor.
         """
         if sensor.grid_row is None or sensor.grid_col is None:
             raise ValueError(
                 f"Sensor {sensor.source_id!r} has no grid location — "
                 f"set grid_row and grid_col before calling register_auto()"
             )
-        self.register(sensor, row=sensor.grid_row, col=sensor.grid_col)
+        layer = sensor.grid_layer if sensor.grid_layer is not None else 0
+        self.register(sensor, row=sensor.grid_row, col=sensor.grid_col, layer=layer)
 
     # ── Layer queries ───────────────────────────────────────────────────────
 
@@ -160,22 +165,22 @@ class SensorInventory:
         """Return the set of distinct source_type values currently registered."""
         return set(self._type_index.keys())
 
-    def get_layer(self, source_type: str) -> Dict[str, Tuple[int, int]]:
+    def get_layer(self, source_type: str) -> Dict[str, Tuple[int, int, int]]:
         """
-        Return all sensors of a given type as {source_id: (row, col)}.
+        Return all sensors of a given type as {source_id: (row, col, layer)}.
 
         Returns an empty dict if no sensors of that type exist.
         """
         sids = self._type_index.get(source_type, set())
         return {sid: self._positions[sid] for sid in sids}
 
-    def layer_positions(self, source_type: str) -> Set[Tuple[int, int]]:
-        """Return the set of (row, col) positions occupied by a sensor type."""
+    def layer_positions(self, source_type: str) -> Set[Tuple[int, int, int]]:
+        """Return the set of (row, col, layer) positions occupied by a sensor type."""
         sids = self._type_index.get(source_type, set())
         return {self._positions[sid] for sid in sids}
 
-    def all_layer_positions(self) -> Dict[str, Set[Tuple[int, int]]]:
-        """Return {source_type: {(row, col), ...}} for every registered type."""
+    def all_layer_positions(self) -> Dict[str, Set[Tuple[int, int, int]]]:
+        """Return {source_type: {(row, col, layer), ...}} for every registered type."""
         return {
             stype: self.layer_positions(stype)
             for stype in self._type_index
@@ -187,7 +192,7 @@ class SensorInventory:
 
         Returns 0.0–1.0.
         """
-        total_cells = self._grid_rows * self._grid_cols
+        total_cells = self._grid_rows * self._grid_cols * self._grid_layers
         if total_cells == 0:
             return 0.0
         return len(self.layer_positions(source_type)) / total_cells
@@ -248,7 +253,7 @@ class SensorInventory:
 
     # ── Coverage analysis ────────────────────────────────────────────────────
 
-    def covered_cells(self) -> Set[Tuple[int, int]]:
+    def covered_cells(self) -> Set[Tuple[int, int, int]]:
         """Return the set of grid cells that have at least one sensor."""
         return set(self._positions.values())
 
@@ -259,7 +264,7 @@ class SensorInventory:
         Returns 0.0–1.0.  A value of 0.3 means 30% of cells have
         sensor coverage.
         """
-        total_cells = self._grid_rows * self._grid_cols
+        total_cells = self._grid_rows * self._grid_cols * self._grid_layers
         if total_cells == 0:
             return 0.0
         return len(self.covered_cells()) / total_cells
@@ -362,5 +367,5 @@ class SensorInventory:
         return (
             f"SensorInventory(sensors={len(self._sensors)}, "
             f"coverage={self.coverage_ratio():.0%}, "
-            f"grid={self._grid_rows}×{self._grid_cols})"
+            f"grid={self._grid_rows}×{self._grid_cols}×{self._grid_layers})"
         )

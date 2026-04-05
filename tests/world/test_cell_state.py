@@ -64,6 +64,7 @@ class TestGenericCell:
         d = cell.to_dict()
         assert d["row"] == 1
         assert d["col"] == 2
+        assert d["layer"] == 0
         assert d["cell_state"] == {"value": 5.0, "label": "TEST"}
         assert d["attributes"] == {"x": 1}
 

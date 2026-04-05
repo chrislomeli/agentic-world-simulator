@@ -74,7 +74,7 @@ class FirePhysicsModule(PhysicsModule[FireCellState]):
         self._base_prob = base_probability
         self._burn_duration = burn_duration_ticks
 
-    def initial_cell_state(self, row: int, col: int) -> FireCellState:
+    def initial_cell_state(self, row: int, col: int, layer: int = 0) -> FireCellState:
         """Return the default cell state — unburned grassland."""
         return FireCellState()
 
@@ -104,9 +104,9 @@ class FirePhysicsModule(PhysicsModule[FireCellState]):
         )
 
         # Track cells ignited this tick to avoid double-ignition.
-        newly_ignited: set[tuple[int, int]] = set()
+        newly_ignited: set[tuple[int, int, int]] = set()
 
-        for row, col in burning:
+        for row, col, _layer in burning:
             cell = grid.get_cell(row, col)
             state = cell.cell_state
 
@@ -121,8 +121,8 @@ class FirePhysicsModule(PhysicsModule[FireCellState]):
                     continue
 
             # ── Try to spread to each burnable neighbor ───────────
-            for nr, nc in grid.neighbors(row, col):
-                if (nr, nc) in newly_ignited:
+            for nr, nc, _nl in grid.neighbors(row, col):
+                if (nr, nc, _nl) in newly_ignited:
                     continue
 
                 neighbor = grid.get_cell(nr, nc)
@@ -149,7 +149,7 @@ class FirePhysicsModule(PhysicsModule[FireCellState]):
                         row=nr, col=nc,
                         new_state=neighbor_state.ignited(tick, new_intensity),
                     ))
-                    newly_ignited.add((nr, nc))
+                    newly_ignited.add((nr, nc, _nl))
 
         return events
 

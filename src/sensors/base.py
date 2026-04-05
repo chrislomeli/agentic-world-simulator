@@ -50,7 +50,7 @@ from __future__ import annotations
 import logging
 from abc import ABC, abstractmethod
 from enum import Enum
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, Union
 
 from transport.schemas import SensorEvent
 
@@ -105,6 +105,7 @@ class SensorBase(ABC):
         cluster_id: str,
         grid_row: Optional[int] = None,
         grid_col: Optional[int] = None,
+        grid_layer: Optional[int] = None,
         metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
         """
@@ -117,6 +118,8 @@ class SensorBase(ABC):
         grid_row    : Row position on the world grid.  Every sensor is a
                       physical device with a location.
         grid_col    : Column position on the world grid.
+        grid_layer  : Layer position on the world grid (default None,
+                      treated as layer 0 by the inventory).
         metadata    : Optional dict passed through to every SensorEvent
                       this sensor emits.  Good place for static context
                       like geo-coordinates or hardware version.
@@ -125,6 +128,7 @@ class SensorBase(ABC):
         self.cluster_id = cluster_id
         self.grid_row = grid_row
         self.grid_col = grid_col
+        self.grid_layer = grid_layer
         self.metadata = metadata or {}
 
         # Simulation tick — incremented each time emit() is called.
@@ -140,9 +144,15 @@ class SensorBase(ABC):
     # ── Location ──────────────────────────────────────────────────────────────
 
     @property
-    def location(self) -> Optional[Tuple[int, int]]:
-        """Return (grid_row, grid_col) or None if the sensor has no position."""
+    def location(self) -> Union[Tuple[int, int, int], Tuple[int, int], None]:
+        """Return sensor position as a tuple, or None if no position is set.
+
+        Returns (row, col, layer) when all three are set,
+        (row, col) when only row and col are set, or None.
+        """
         if self.grid_row is not None and self.grid_col is not None:
+            if self.grid_layer is not None:
+                return (self.grid_row, self.grid_col, self.grid_layer)
             return (self.grid_row, self.grid_col)
         return None
 
@@ -266,6 +276,8 @@ class SensorBase(ABC):
             event_metadata["grid_row"] = self.grid_row
         if self.grid_col is not None:
             event_metadata["grid_col"] = self.grid_col
+        if self.grid_layer is not None:
+            event_metadata["grid_layer"] = self.grid_layer
 
         return SensorEvent.create(
             source_id=self.source_id,

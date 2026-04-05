@@ -71,7 +71,7 @@ class TemperatureSensor(SensorBase):
 
         # Heat from nearby burning cells.
         heat_boost = 0.0
-        for nr, nc in self._engine.grid.neighbors(self.grid_row, self.grid_col):
+        for nr, nc, _nl in self._engine.grid.neighbors(self.grid_row, self.grid_col):
             neighbor = self._engine.grid.get_cell(nr, nc)
             if neighbor.cell_state.fire_state == FireState.BURNING:
                 heat_boost += neighbor.cell_state.fire_intensity * 15.0

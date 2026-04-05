@@ -127,9 +127,9 @@ class TestFireGrid:
     def test_neighbors_corner(self, small_fire_grid):
         neighbors = small_fire_grid.neighbors(0, 0)
         assert len(neighbors) == 3
-        assert (0, 1) in neighbors
-        assert (1, 0) in neighbors
-        assert (1, 1) in neighbors
+        assert (0, 1, 0) in neighbors
+        assert (1, 0, 0) in neighbors
+        assert (1, 1, 0) in neighbors
 
     def test_neighbors_edge(self, small_fire_grid):
         assert len(small_fire_grid.neighbors(0, 2)) == 5
@@ -150,8 +150,8 @@ class TestFireGrid:
             lambda c: c.cell_state.fire_state == FireState.BURNING
         )
         assert len(burning) == 2
-        assert (1, 1) in burning
-        assert (3, 3) in burning
+        assert (1, 1, 0) in burning
+        assert (3, 3, 0) in burning
 
     def test_fire_intensity_via_cells_where(self, small_fire_grid):
         ignited = small_fire_grid.get_cell(2, 2).cell_state.ignited(tick=0, intensity=0.6)
@@ -175,4 +175,4 @@ class TestFireGrid:
         assert snap["cols"] == 5
         assert len(snap["cells"]) == 5
         assert len(snap["cells"][0]) == 5
-        assert snap["cells"][0][0]["cell_state"]["terrain_type"] == "GRASSLAND"
+        assert snap["cells"][0][0][0]["cell_state"]["terrain_type"] == "GRASSLAND"

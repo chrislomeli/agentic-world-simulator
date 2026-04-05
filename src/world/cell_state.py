@@ -86,17 +86,19 @@ class GenericCell(Generic[C]):
     doesn't change during simulation (e.g. geo-coordinates, zone labels).
     """
 
-    __slots__ = ("row", "col", "cell_state", "attributes")
+    __slots__ = ("row", "col", "layer", "cell_state", "attributes")
 
     def __init__(
         self,
         row: int,
         col: int,
         cell_state: C,
+        layer: int = 0,
         attributes: Optional[Dict[str, Any]] = None,
     ) -> None:
         self.row = row
         self.col = col
+        self.layer = layer
         self.cell_state = cell_state
         self.attributes = attributes or {}
 
@@ -105,12 +107,13 @@ class GenericCell(Generic[C]):
         return {
             "row": self.row,
             "col": self.col,
+            "layer": self.layer,
             "cell_state": self.cell_state.model_dump(),
             "attributes": self.attributes,
         }
 
     def __repr__(self) -> str:
         return (
-            f"GenericCell(row={self.row}, col={self.col}, "
+            f"GenericCell(row={self.row}, col={self.col}, layer={self.layer}, "
             f"state={self.cell_state.summary_label()})"
         )

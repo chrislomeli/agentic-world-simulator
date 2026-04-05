@@ -59,12 +59,13 @@ class StateEvent(Generic[C]):
     The engine applies these to the grid after each tick.
     Physics modules produce them but never apply them directly.
 
-    row, col  : which cell changed
-    new_state : the complete new CellState for that cell
+    row, col, layer : which cell changed
+    new_state       : the complete new CellState for that cell
     """
     row: int
     col: int
     new_state: C
+    layer: int = 0
 
 
 # ── PhysicsModule ABC ────────────────────────────────────────────────────────
@@ -102,13 +103,14 @@ class PhysicsModule(ABC, Generic[C]):
     """
 
     @abstractmethod
-    def initial_cell_state(self, row: int, col: int) -> C:
+    def initial_cell_state(self, row: int, col: int, layer: int = 0) -> C:
         """
-        Return the default cell state for a new cell at (row, col).
+        Return the default cell state for a new cell at (row, col, layer).
 
         Called by GenericTerrainGrid during construction to initialise
-        every cell.  The row/col are provided in case the initial state
-        depends on position (e.g. elevation from a terrain map).
+        every cell.  The coordinates are provided in case the initial
+        state depends on position (e.g. elevation from a terrain map,
+        or different state per layer).
         """
         ...
 

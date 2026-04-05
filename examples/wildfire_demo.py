@@ -30,9 +30,9 @@ from pathlib import Path
 # Add src/ to path when running directly (not needed with pip install -e .)
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from world import create_basic_wildfire
+from domains.wildfire import create_basic_wildfire
 from world.sensor_inventory import SensorInventory
-from sensors import (
+from domains.wildfire.sensors import (
     TemperatureSensor,
     HumiditySensor,
     WindSensor,
@@ -66,15 +66,16 @@ def print_grid(engine, tick: int) -> None:
         row_str = []
         for c in range(engine.grid.cols):
             cell = engine.grid.get_cell(r, c)
+            state = cell.cell_state
             from world.grid import TerrainType
-            if cell.terrain_type == TerrainType.WATER:
+            if state.terrain_type == TerrainType.WATER:
                 row_str.append("~")
-            elif cell.terrain_type == TerrainType.ROCK:
+            elif state.terrain_type == TerrainType.ROCK:
                 row_str.append("^")
-            elif cell.terrain_type == TerrainType.URBAN and cell.fire_state == FireState.UNBURNED:
+            elif state.terrain_type == TerrainType.URBAN and state.fire_state == FireState.UNBURNED:
                 row_str.append("U")
             else:
-                row_str.append(symbols.get(cell.fire_state, "?"))
+                row_str.append(symbols.get(state.fire_state, "?"))
         print(f"  {'  '.join(row_str)}  | row {r}")
     print()
 
@@ -186,8 +187,8 @@ def run_demo():
         # Print sensor readings every 5 ticks (and on tick 0 and 1).
         if t in (0, 1, 5, 10, 15, 19):
             print(f"--- Tick {t} ---")
-            print(f"  Weather: {engine.weather}")
-            print(f"  Fire:    {snapshot.cell_summary}")
+            print(f"  Weather: {engine.environment}")
+            print(f"  Fire:    {snapshot.grid_summary}")
 
             # Emit sensor events (this is what the agent would receive).
             for sensor in sensors:
@@ -220,7 +221,7 @@ def run_demo():
     print("=" * 70)
     print("  SCENARIO COMPLETE")
     print("=" * 70)
-    final = engine.grid.summary()
+    final = engine.grid.summary_counts()
     print(f"  Final grid state: {final}")
     print(f"  Total ticks: {engine.current_tick}")
     print(f"  Ground truth snapshots recorded: {len(engine.history)}")

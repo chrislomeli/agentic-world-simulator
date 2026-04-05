@@ -162,7 +162,7 @@ class GenericWorldEngine(Generic[C]):
 
         # ── 3. Apply state events to the grid ────────────────────
         for event in state_events:
-            self.grid.update_cell_state(event.row, event.col, event.new_state)
+            self.grid.update_cell_state(event.row, event.col, event.new_state, event.layer)
 
         # ── 4. Record ground truth ───────────────────────────────
         domain_summary = self._physics.summarize(self.grid)
@@ -175,6 +175,7 @@ class GenericWorldEngine(Generic[C]):
                 {
                     "row": e.row,
                     "col": e.col,
+                    "layer": e.layer,
                     "new_state": e.new_state.model_dump(),
                 }
                 for e in state_events
@@ -216,7 +217,7 @@ class GenericWorldEngine(Generic[C]):
             return self.history[tick]
         return None
 
-    def inject_state(self, row: int, col: int, state: C) -> None:
+    def inject_state(self, row: int, col: int, state: C, layer: int = 0) -> None:
         """
         Manually set a cell's state.
 
@@ -225,11 +226,11 @@ class GenericWorldEngine(Generic[C]):
 
         Parameters
         ──────────
-        row, col : which cell to modify
-        state    : the new CellState to set
+        row, col, layer : which cell to modify (layer defaults to 0)
+        state           : the new CellState to set
         """
-        self.grid.update_cell_state(row, col, state)
+        self.grid.update_cell_state(row, col, state, layer)
         logger.info(
-            "Injected state at (%d,%d): %s tick=%d",
-            row, col, state.summary_label(), self._tick,
+            "Injected state at (%d,%d,%d): %s tick=%d",
+            row, col, layer, state.summary_label(), self._tick,
         )

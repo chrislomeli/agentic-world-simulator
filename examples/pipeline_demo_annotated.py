@@ -162,10 +162,11 @@ def render_grid(engine, inventory=None, layers=None):
         show_types = set(layers) if layers else inventory.layer_types()
         for stype in show_types:
             for pos in inventory.layer_positions(stype):
-                if pos in sensor_positions:
-                    sensor_positions[pos] = "+"  # overlap
+                rc = (pos[0], pos[1])  # project to 2D for rendering
+                if rc in sensor_positions:
+                    sensor_positions[rc] = "+"  # overlap
                 else:
-                    sensor_positions[pos] = sensor_glyph.get(stype, "?")
+                    sensor_positions[rc] = sensor_glyph.get(stype, "?")
 
     rows = []
     # For each row in the grid

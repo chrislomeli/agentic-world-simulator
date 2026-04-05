@@ -17,7 +17,7 @@ class ToyState(CellState):
         return self.tag
 
 
-def make_toy_state(row: int, col: int) -> ToyState:
+def make_toy_state(row: int, col: int, layer: int = 0) -> ToyState:
     """Factory that encodes position into the state for verification."""
     return ToyState(tag="EMPTY", count=row * 100 + col)
 
@@ -56,9 +56,9 @@ class TestGenericTerrainGrid:
         # Top-left corner: only 3 neighbors
         neighbors = grid.neighbors(0, 0)
         assert len(neighbors) == 3
-        assert (0, 1) in neighbors
-        assert (1, 0) in neighbors
-        assert (1, 1) in neighbors
+        assert (0, 1, 0) in neighbors
+        assert (1, 0, 0) in neighbors
+        assert (1, 1, 0) in neighbors
 
     def test_neighbors_center(self):
         grid = GenericTerrainGrid(rows=5, cols=5, initial_state_factory=make_toy_state)
@@ -90,18 +90,20 @@ class TestGenericTerrainGrid:
 
         active = grid.cells_where(lambda c: c.cell_state.tag == "ACTIVE")
         assert len(active) == 2
-        assert (1, 1) in active
-        assert (2, 0) in active
+        assert (1, 1, 0) in active
+        assert (2, 0, 0) in active
 
     def test_snapshot(self):
         grid = GenericTerrainGrid(rows=2, cols=2, initial_state_factory=make_toy_state)
         snap = grid.snapshot()
         assert snap["rows"] == 2
         assert snap["cols"] == 2
+        assert snap["layers"] == 1
         assert len(snap["cells"]) == 2
         assert len(snap["cells"][0]) == 2
-        # Check a cell's serialised state
-        assert snap["cells"][0][0]["cell_state"]["tag"] == "EMPTY"
+        # cells[row][col] is a list of layers
+        assert len(snap["cells"][0][0]) == 1
+        assert snap["cells"][0][0][0]["cell_state"]["tag"] == "EMPTY"
 
     def test_summary_counts(self):
         grid = GenericTerrainGrid(rows=3, cols=3, initial_state_factory=make_toy_state)

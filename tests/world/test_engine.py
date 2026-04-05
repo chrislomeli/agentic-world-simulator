@@ -119,7 +119,7 @@ class TestFireSpreadIntegration:
         )
 
         # All cells with high vegetation and very dry fuel
-        def make_state(r, c):
+        def make_state(r, c, layer=0):
             return FireCellState(vegetation=0.8, fuel_moisture=0.05)
 
         grid = GenericTerrainGrid(rows=5, cols=5, initial_state_factory=make_state)

@@ -104,7 +104,7 @@ class TestSpreadProbability:
         env = FireEnvironmentState(humidity_pct=5.0, wind_speed_mps=10.0)
 
         # Set all neighbors to rock
-        for nr, nc in grid.neighbors(1, 1):
+        for nr, nc, _nl in grid.neighbors(1, 1):
             rock = FireCellState(terrain_type=TerrainType.ROCK, vegetation=0.0)
             grid.update_cell_state(nr, nc, rock)
 
@@ -120,7 +120,7 @@ class TestSpreadProbability:
         grid = GenericTerrainGrid(rows=3, cols=3, initial_state_factory=physics.initial_cell_state)
         env = FireEnvironmentState()
 
-        for nr, nc in grid.neighbors(1, 1):
+        for nr, nc, _nl in grid.neighbors(1, 1):
             water = FireCellState(terrain_type=TerrainType.WATER, vegetation=0.0)
             grid.update_cell_state(nr, nc, water)
 

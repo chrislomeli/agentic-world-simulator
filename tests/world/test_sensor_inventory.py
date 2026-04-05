@@ -50,7 +50,7 @@ class TestRegistration:
         s = StubSensor(source_id="s1")
         inventory.register(s, row=2, col=3)
         assert inventory.get_sensor("s1") is s
-        assert inventory.get_position("s1") == (2, 3)
+        assert inventory.get_position("s1") == (2, 3, 0)
 
     def test_register_duplicate_raises(self, inventory):
         s = StubSensor(source_id="s1")
@@ -125,7 +125,7 @@ class TestCoverage:
     def test_covered_cells(self, inventory):
         inventory.register(StubSensor(source_id="s1"), row=1, col=2)
         inventory.register(StubSensor(source_id="s2"), row=3, col=4)
-        assert inventory.covered_cells() == {(1, 2), (3, 4)}
+        assert inventory.covered_cells() == {(1, 2, 0), (3, 4, 0)}
 
 
 # ── Thinning tests ───────────────────────────────────────────────────────────
@@ -224,7 +224,7 @@ class TestRepr:
     def test_repr(self, inventory):
         r = repr(inventory)
         assert "SensorInventory" in r
-        assert "5×5" in r
+        assert "5×5×1" in r
 
 
 # ── Auto-registration tests ─────────────────────────────────────────────────
@@ -233,7 +233,7 @@ class TestRegisterAuto:
     def test_register_auto(self, inventory):
         s = StubSensor(source_id="s1", grid_row=2, grid_col=3)
         inventory.register_auto(s)
-        assert inventory.get_position("s1") == (2, 3)
+        assert inventory.get_position("s1") == (2, 3, 0)
 
     def test_register_auto_no_location_raises(self, inventory):
         s = StubSensor(source_id="s1")
@@ -258,7 +258,7 @@ class TestLayers:
         inventory.register(StubSensorB(source_id="b1"), row=2, col=2)
 
         layer = inventory.get_layer("stub")
-        assert layer == {"s1": (0, 0), "s2": (1, 1)}
+        assert layer == {"s1": (0, 0, 0), "s2": (1, 1, 0)}
 
     def test_get_layer_empty(self, inventory):
         assert inventory.get_layer("nonexistent") == {}
@@ -266,13 +266,13 @@ class TestLayers:
     def test_layer_positions(self, inventory):
         inventory.register(StubSensor(source_id="s1"), row=0, col=0)
         inventory.register(StubSensor(source_id="s2"), row=1, col=1)
-        assert inventory.layer_positions("stub") == {(0, 0), (1, 1)}
+        assert inventory.layer_positions("stub") == {(0, 0, 0), (1, 1, 0)}
 
     def test_all_layer_positions(self, inventory):
         inventory.register(StubSensor(source_id="s1"), row=0, col=0)
         inventory.register(StubSensorB(source_id="b1"), row=2, col=2)
         result = inventory.all_layer_positions()
-        assert result == {"stub": {(0, 0)}, "stub_b": {(2, 2)}}
+        assert result == {"stub": {(0, 0, 0)}, "stub_b": {(2, 2, 0)}}
 
     def test_layer_coverage_ratio(self, inventory):
         # 5x5 = 25 cells, 2 stub sensors at unique positions = 8%
@@ -285,7 +285,7 @@ class TestLayers:
         inventory.register(StubSensor(source_id="s1"), row=0, col=0)
         inventory.register(StubSensor(source_id="s2"), row=1, col=1)
         inventory.unregister("s1")
-        assert inventory.get_layer("stub") == {"s2": (1, 1)}
+        assert inventory.get_layer("stub") == {"s2": (1, 1, 0)}
 
     def test_unregister_last_of_type_removes_layer(self, inventory):
         inventory.register(StubSensor(source_id="s1"), row=0, col=0)

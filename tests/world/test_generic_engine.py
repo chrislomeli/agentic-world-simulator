@@ -43,7 +43,7 @@ class HeatPhysics(PhysicsModule[HeatCellState]):
     right neighbor by 10 degrees.  Simple enough to predict in tests.
     """
 
-    def initial_cell_state(self, row: int, col: int) -> HeatCellState:
+    def initial_cell_state(self, row: int, col: int, layer: int = 0) -> HeatCellState:
         return HeatCellState(temperature=0.0)
 
     def tick_physics(

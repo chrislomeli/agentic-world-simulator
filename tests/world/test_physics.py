@@ -39,7 +39,7 @@ class TestPhysicsModuleABC:
         """A subclass missing any abstract method cannot be instantiated."""
 
         class IncompletePhysics(PhysicsModule[SimpleCellState]):
-            def initial_cell_state(self, row, col):
+            def initial_cell_state(self, row, col, layer=0):
                 return SimpleCellState()
             # missing tick_physics and summarize
 
