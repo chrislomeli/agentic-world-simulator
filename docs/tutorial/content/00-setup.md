@@ -64,35 +64,94 @@ uv 0.4.x (or later)
 
 ---
 
-## Step 2: Clone or create the project
+## Step 2: Set up your own repo with tutorial reference
 
-### Option A: Start from scratch (recommended for learning)
+Follow this workflow so you have your own repo while keeping the tutorial code accessible for reference and comparison.
 
-Create a new directory and initialize the project structure:
+**Step 2a — Create your own GitHub repo**
+
+On GitHub (or your Git platform):
+1. Create a new repository (e.g., `wildfire-project`)
+2. Initialize with a README (optional)
+3. Copy the HTTPS clone URL
+
+**Step 2b — Clone your repo locally**
 
 ```bash
-mkdir agentic-world-simulator
-cd agentic-world-simulator
-
-# Create directory structure
-mkdir -p src/{world,sensors,transport,bridge,agents/{cluster,supervisor},domains/wildfire,tools,resources}
-mkdir -p tests examples docs/tutorial/content
+git clone <your-repo-url>
+cd <your-repo-name>
 ```
 
-### Option B: Clone the repository
+for example, if your repo is `agentic-tutorial` and your git url is `git@github.com:myself/agentic-tutorial.git` then you would type:
+```bash
+git clone git@github.com:myself/agentic-tutorial.git
+cd agentic-tutorial
+```
 
-If you have access to the repository:
+
+
+**Step 2c — Add the tutorial repo as a remote**
 
 ```bash
-git clone https://github.com/chrislomeli/agentic-world-simulator.git
-cd agentic-world-simulator
+git remote add tutorial https://github.com/chrislomeli/agentic-world-simulator.git
+git fetch tutorial
+```
+
+Now you have two remotes:
+- `origin` — your own repo (where you push your work)
+- `tutorial` — the reference solution (for comparison and guidance)
+
+**Step 2d — (Optional) Check out tutorial reference branches**
+
+Each session has a tag/branch you can reference:
+
+```bash
+# View available sessions
+git branch -r --list "tutorial/*"
+
+# Check out a specific session state (puts you in detached HEAD — fine for reference)
+git checkout tutorial/session-02
+```
+
+**Step 2e — Compare and copy**
+
+Now you can:
+
+- **Inspect the tutorial code:**
+  ```bash
+  git show tutorial/session-07:src/agents/cluster/agent.py
+  ```
+
+- **Diff against your progress:**
+  ```bash
+  git diff HEAD tutorial/session-02
+  ```
+
+- **Copy files when you get stuck:**
+  ```bash
+  git checkout tutorial/session-02 -- src/domains/wildfire/physics.py
+  ```
+
+Go back to your work branch anytime:
+```bash
+git checkout -
 ```
 
 ---
 
-## Step 3: Create `pyproject.toml`
+## Step 3: Set up your `pyproject.toml`
 
-This file defines your project metadata and dependencies. Create it in the project root:
+You can copy it from the tutorial repo or create your own. The easiest approach:
+
+**Option A: Copy from the tutorial repo**
+(note: you must have added the remote tutorial repository and fetched it)
+```bash
+git show tutorial/main:pyproject.toml > pyproject.toml
+```
+
+**Option B: Create your own**
+
+If you prefer to start fresh, create it in your project root:
 
 ```toml
 [build-system]
@@ -183,7 +242,7 @@ uv pip install -e .
 
 This installs the project in editable mode with all core dependencies.
 
-### LLM dependencies (optional, needed for Sessions 07, 10+)
+### LLM dependencies (needed for Sessions 07, 10+)
 
 ```bash
 uv pip install -e ".[llm]"
@@ -456,10 +515,26 @@ To fix this, either:
 
 ## Step 9: Create initial project structure
 
+You can copy the directory structure from the tutorial or create it manually.
+
+**Option A: Copy from the tutorial (recommended)**
+
+```bash
+# Copy the entire src/ directory from tutorial
+git checkout tutorial/main -- src/
+mkdir -p tests
+touch tests/__init__.py
+```
+
+**Option B: Create manually**
+
 Create placeholder `__init__.py` files to make directories importable:
 
 ```bash
 # Core modules
+mkdir -p src/{world,sensors,transport,bridge,agents/{cluster,supervisor},domains/wildfire,tools,resources}
+mkdir -p tests
+
 touch src/__init__.py
 touch src/world/__init__.py
 touch src/sensors/__init__.py
@@ -473,14 +548,13 @@ touch src/domains/wildfire/__init__.py
 touch src/tools/__init__.py
 touch src/resources/__init__.py
 
-# Tests
 touch tests/__init__.py
 ```
 
 **Verify imports work:**
 
-```python
-python -c "import world; import sensors; import agents; print('✓ All modules importable')"
+```bash
+python -c "import sys; sys.path.insert(0, 'src'); import world; import sensors; print('✓ All modules importable')"
 ```
 
 ---
