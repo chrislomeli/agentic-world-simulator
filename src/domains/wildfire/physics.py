@@ -1,26 +1,16 @@
 """
 ogar.domains.wildfire.physics
 
-FirePhysicsModule — heuristic fire spread model.
+SimpleFirePhysicsModule — heuristic fire spread model (placeholder).
 
-This is the wildfire domain's implementation of PhysicsModule[FireCellState].
-It is a stochastic cellular automaton: each tick, burning cells may spread
-fire to unburned neighbors based on environmental factors.
+This is a simplified probabilistic fire spread model for R&D and agent
+testing. It does NOT model real wildfire physics.
 
-Ported from ogar.world.fire_spread.heuristic.FireSpreadHeuristic — same
-spread logic, now producing StateEvent[FireCellState] instead of FireEvent.
+See rothermel_physics.py for the physics-based Rothermel model, which
+replaces this placeholder and uses real fire behavior equations.
 
-╔═══════════════════════════════════════════════════════════════╗
-║  THIS IS A PLACEHOLDER.                                      ║
-║                                                               ║
-║  It uses simplified probabilistic rules to simulate fire      ║
-║  spread for R&D and agent testing.  It does NOT model real    ║
-║  wildfire physics.                                            ║
-║                                                               ║
-║  It can be replaced with a semi-empirical model (Rothermel),  ║
-║  a physics-based model, or an ML model by implementing the    ║
-║  PhysicsModule[FireCellState] interface.                      ║
-╚═══════════════════════════════════════════════════════════════╝
+This module is retained for backward compatibility and as a reference
+implementation. FirePhysicsModule is an alias for SimpleFirePhysicsModule.
 
 Spread probability factors
 ───────────────────────────
@@ -51,7 +41,7 @@ from world.generic_grid import GenericTerrainGrid
 from world.physics import PhysicsModule, StateEvent
 
 
-class FirePhysicsModule(PhysicsModule[FireCellState]):
+class SimpleFirePhysicsModule(PhysicsModule[FireCellState]):
     """
     Heuristic fire spread model implementing PhysicsModule[FireCellState].
 
@@ -244,3 +234,9 @@ class FirePhysicsModule(PhysicsModule[FireCellState]):
         """Convert global humidity percentage to a spread multiplier."""
         h = max(0.0, min(100.0, humidity_pct)) / 100.0
         return 1.5 - h * 1.3
+
+
+# ── Backward compatibility alias ──────────────────────────────────────────────
+# Existing code that imports FirePhysicsModule continues to work unchanged.
+
+FirePhysicsModule = SimpleFirePhysicsModule

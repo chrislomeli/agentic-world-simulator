@@ -30,7 +30,8 @@ Usage
 
 from domains.wildfire.cell_state import FireCellState, FireState, TerrainType
 from domains.wildfire.environment import FireEnvironmentState
-from domains.wildfire.physics import FirePhysicsModule
+from domains.wildfire.physics import FirePhysicsModule, SimpleFirePhysicsModule
+from domains.wildfire.rothermel_physics import RothermelFirePhysicsModule
 from domains.wildfire.scenarios import (
     create_basic_wildfire,
     create_full_wildfire_scenario,
@@ -42,7 +43,9 @@ __all__ = [
     "FireState",
     "TerrainType",
     "FireEnvironmentState",
-    "FirePhysicsModule",
+    "FirePhysicsModule",        # backward-compat alias for SimpleFirePhysicsModule
+    "SimpleFirePhysicsModule",
+    "RothermelFirePhysicsModule",
     "create_basic_wildfire",
     "create_full_wildfire_scenario",
     "create_wildfire_resources",

@@ -47,6 +47,7 @@ class _SupervisorToolState:
     findings: List[AnomalyFinding] = []
     active_cluster_ids: List[str] = []
     resource_inventory: Optional[ResourceInventory] = None
+    fire_behavior_summary: Optional[Dict[str, Any]] = None
 
 
 _state = _SupervisorToolState()
@@ -56,11 +57,13 @@ def set_supervisor_tool_state(
     findings: List[AnomalyFinding],
     active_cluster_ids: List[str],
     resource_inventory: Optional[ResourceInventory] = None,
+    fire_behavior_summary: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Called by the graph before the LLM/tool loop to load context."""
     _state.findings = list(findings)
     _state.active_cluster_ids = list(active_cluster_ids)
     _state.resource_inventory = resource_inventory
+    _state.fire_behavior_summary = fire_behavior_summary
 
 
 def clear_supervisor_tool_state() -> None:
@@ -68,6 +71,7 @@ def clear_supervisor_tool_state() -> None:
     _state.findings = []
     _state.active_cluster_ids = []
     _state.resource_inventory = None
+    _state.fire_behavior_summary = None
 
 
 # ── Tools ────────────────────────────────────────────────────────────────────

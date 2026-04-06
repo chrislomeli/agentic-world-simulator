@@ -4,7 +4,13 @@ import random
 import pytest
 
 from domains.wildfire import FireState, TerrainType
-from domains.wildfire import create_basic_wildfire
+from domains.wildfire import (
+    create_basic_wildfire,
+    create_full_wildfire_scenario,
+    create_wildfire_resources,
+)
+from domains.wildfire.physics import SimpleFirePhysicsModule
+from domains.wildfire.rothermel_physics import RothermelFirePhysicsModule
 from world import GenericWorldEngine
 
 
@@ -77,3 +83,67 @@ class TestBasicWildfire:
                 assert state.fire_state == FireState.UNBURNED, (
                     f"Rock cell (4, {c}) should not burn"
                 )
+
+    def test_use_rothermel_true(self):
+        engine = create_basic_wildfire(use_rothermel=True)
+        assert isinstance(engine._physics, RothermelFirePhysicsModule)
+
+    def test_use_rothermel_false(self):
+        engine = create_basic_wildfire(use_rothermel=False)
+        assert isinstance(engine._physics, SimpleFirePhysicsModule)
+
+    def test_rothermel_snapshot_has_fire_behavior(self):
+        engine = create_basic_wildfire(use_rothermel=True)
+        snapshot = engine.tick()
+        assert "avg_ros_ft_min" in snapshot.domain_summary
+        assert "danger_rating" in snapshot.domain_summary
+
+
+class TestCreateWildfireResources:
+    def test_creates_inventory(self):
+        inv = create_wildfire_resources()
+        assert inv.size > 0
+
+    def test_has_nwcg_aligned_resources(self):
+        inv = create_wildfire_resources()
+        types_present = {r.resource_type for r in inv.all_resources()}
+        assert "crew" in types_present
+        assert "engine" in types_present
+        assert "dozer" in types_present
+
+    def test_nwcg_metadata_present(self):
+        inv = create_wildfire_resources()
+        crews = inv.by_type("crew")
+        assert len(crews) > 0
+        for crew in crews:
+            assert "nwcg_id" in crew.metadata
+            assert "production_rate_chains_hr" in crew.metadata
+
+    def test_engine_nwcg_metadata(self):
+        inv = create_wildfire_resources()
+        engines = inv.by_type("engine")
+        for engine in engines:
+            assert engine.metadata.get("nwcg_id") == "E-3"
+            assert "tank_gal" in engine.metadata
+
+    def test_helicopter_has_capacity(self):
+        inv = create_wildfire_resources()
+        helis = inv.by_type("helicopter")
+        assert len(helis) > 0
+        for h in helis:
+            assert h.capacity > 0
+
+
+class TestCreateFullWildfireScenario:
+    def test_returns_engine_and_inventory(self):
+        engine, inv = create_full_wildfire_scenario()
+        assert isinstance(engine, GenericWorldEngine)
+        assert inv.size > 0
+
+    def test_rothermel_engine_by_default(self):
+        engine, _ = create_full_wildfire_scenario()
+        assert isinstance(engine._physics, RothermelFirePhysicsModule)
+
+    def test_simple_physics_option(self):
+        engine, _ = create_full_wildfire_scenario(use_rothermel=False)
+        assert isinstance(engine._physics, SimpleFirePhysicsModule)

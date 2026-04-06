@@ -28,18 +28,31 @@ from typing import Tuple
 
 from domains.wildfire.cell_state import FireCellState, FireState, TerrainType
 from domains.wildfire.environment import FireEnvironmentState
-from domains.wildfire.physics import FirePhysicsModule
+from domains.wildfire.physics import SimpleFirePhysicsModule
 from resources.base import ResourceBase, ResourceStatus
 from resources.inventory import ResourceInventory
 from world.generic_engine import GenericWorldEngine
 from world.generic_grid import GenericTerrainGrid
 
 
-def create_basic_wildfire() -> GenericWorldEngine[FireCellState]:
+def create_basic_wildfire(
+    *,
+    use_rothermel: bool = True,
+    cell_size_ft: float = 200.0,
+    time_step_min: float = 5.0,
+) -> GenericWorldEngine[FireCellState]:
     """
     Create a fully configured wildfire scenario.
 
     Returns a GenericWorldEngine ready to tick.
+
+    Parameters
+    ──────────
+    use_rothermel : When True (default), use RothermelFirePhysicsModule for
+                    physics-grounded fire spread.  When False, use the simple
+                    probabilistic SimpleFirePhysicsModule.
+    cell_size_ft  : Grid cell spatial extent in feet (Rothermel only).
+    time_step_min : Minutes per simulation tick (Rothermel only).
 
     Grid layout (10×10):
       Row 0-1 col 0: WATER (lake)
@@ -50,10 +63,18 @@ def create_basic_wildfire() -> GenericWorldEngine[FireCellState]:
       Fire starts at (7, 2) — south-west grassland.
       Wind from SW (225°) → pushes fire north-east.
     """
-    physics = FirePhysicsModule(
-        base_probability=0.15,
-        burn_duration_ticks=5,
-    )
+    if use_rothermel:
+        from domains.wildfire.rothermel_physics import RothermelFirePhysicsModule
+        physics = RothermelFirePhysicsModule(
+            cell_size_ft=cell_size_ft,
+            time_step_min=time_step_min,
+            burn_duration_ticks=5,
+        )
+    else:
+        physics = SimpleFirePhysicsModule(
+            base_probability=0.15,
+            burn_duration_ticks=5,
+        )
 
     # ── Build grid with custom initial states ─────────────────────
     # We use the default factory first, then overwrite cells.
@@ -147,23 +168,28 @@ def create_basic_wildfire() -> GenericWorldEngine[FireCellState]:
 
 def create_wildfire_resources(grid_rows: int = 10, grid_cols: int = 10) -> ResourceInventory:
     """
-    Create a ResourceInventory with sample preparedness assets for the
+    Create a ResourceInventory with NWCG-aligned preparedness assets for the
     basic wildfire scenario.
 
     Resource layout (matching the 10×10 basic wildfire grid):
 
-      Firetrucks:
-        firetruck-1  : cluster-south, at (9, 0) — south-west station
-        firetruck-2  : cluster-south, at (9, 9) — south-east station
+      Crew:
+        crew-south-1 : cluster-south, at (9, 1) — IHC hotshot crew
+        crew-south-2 : cluster-south, at (9, 3) — Type-2 hand crew
 
-      Ambulance:
-        ambulance-1  : cluster-south, at (8, 5) — central south
+      Engines:
+        engine-south-1 : cluster-south, at (9, 0) — Wildland Engine (E-3)
+        engine-south-2 : cluster-south, at (9, 9) — Wildland Engine (E-3)
 
-      Hospital:
-        hospital-1   : cluster-south, at (7, 9) — near urban area, 50 beds
+      Dozer:
+        dozer-south-1 : cluster-south, at (9, 5) — Heavy Dozer (D-1)
 
-      Helicopter:
-        heli-1       : cluster-north, at (0, 5) — northern airfield
+      Medical:
+        ambulance-1 : cluster-south, at (8, 5) — ambulance
+        hospital-1  : cluster-south, at (7, 9) — 50-bed hospital
+
+      Aircraft:
+        heli-1      : cluster-north, at (0, 5) — Heavy Helicopter (H-1)
 
     This mirrors a realistic deployment: fire assets near the ignition
     zone (south), medical assets near the urban area (south-east),
@@ -171,26 +197,101 @@ def create_wildfire_resources(grid_rows: int = 10, grid_cols: int = 10) -> Resou
     """
     inventory = ResourceInventory(grid_rows=grid_rows, grid_cols=grid_cols)
 
-    # ── Firetrucks ────────────────────────────────────────────────
+    # ── Hotshot crew (IHC, C-1) ───────────────────────────────────
     inventory.register(ResourceBase(
-        resource_id="firetruck-1",
-        resource_type="firetruck",
+        resource_id="crew-south-1",
+        resource_type="crew",
+        cluster_id="cluster-south",
+        grid_row=9, grid_col=1,
+        capacity=1.0,   # 1 crew unit (20-person)
+        available=1.0,
+        mobile=True,
+        metadata={
+            "nwcg_id": "C-1",
+            "nwcg_type": 1,
+            "name": "Interagency Hotshot Crew (IHC)",
+            "unit": "20-person",
+            "production_rate_chains_hr": 15,
+            "category": "Personnel",
+        },
+    ))
+
+    # ── Hand crew (C-2) ───────────────────────────────────────────
+    inventory.register(ResourceBase(
+        resource_id="crew-south-2",
+        resource_type="crew",
+        cluster_id="cluster-south",
+        grid_row=9, grid_col=3,
+        capacity=1.0,
+        available=1.0,
+        mobile=True,
+        metadata={
+            "nwcg_id": "C-2",
+            "nwcg_type": 2,
+            "name": "Hand Crew",
+            "unit": "20-person",
+            "production_rate_chains_hr": 8,
+            "category": "Personnel",
+        },
+    ))
+
+    # ── Wildland Engine SW (E-3) ──────────────────────────────────
+    inventory.register(ResourceBase(
+        resource_id="engine-south-1",
+        resource_type="engine",
         cluster_id="cluster-south",
         grid_row=9, grid_col=0,
         capacity=500.0,
         available=500.0,
         mobile=True,
-        metadata={"unit": "gallons", "crew_size": 4, "model": "Type 1"},
+        metadata={
+            "nwcg_id": "E-3",
+            "nwcg_type": 3,
+            "name": "Wildland Engine (4x4)",
+            "unit": "gallons",
+            "tank_gal": 500,
+            "pump_gpm": 150,
+            "category": "Equipment",
+        },
     ))
+
+    # ── Wildland Engine SE (E-3) ──────────────────────────────────
     inventory.register(ResourceBase(
-        resource_id="firetruck-2",
-        resource_type="firetruck",
+        resource_id="engine-south-2",
+        resource_type="engine",
         cluster_id="cluster-south",
         grid_row=9, grid_col=9,
         capacity=500.0,
         available=500.0,
         mobile=True,
-        metadata={"unit": "gallons", "crew_size": 4, "model": "Type 3"},
+        metadata={
+            "nwcg_id": "E-3",
+            "nwcg_type": 3,
+            "name": "Wildland Engine (4x4)",
+            "unit": "gallons",
+            "tank_gal": 500,
+            "pump_gpm": 150,
+            "category": "Equipment",
+        },
+    ))
+
+    # ── Heavy Dozer (D-1) ─────────────────────────────────────────
+    inventory.register(ResourceBase(
+        resource_id="dozer-south-1",
+        resource_type="dozer",
+        cluster_id="cluster-south",
+        grid_row=9, grid_col=5,
+        capacity=1.0,   # 1 dozer unit
+        available=1.0,
+        mobile=True,
+        metadata={
+            "nwcg_id": "D-1",
+            "nwcg_type": 1,
+            "name": "Heavy Dozer (D8/D7)",
+            "unit": "Vehicle",
+            "production_rate_chains_hr": 60,
+            "category": "Equipment",
+        },
     ))
 
     # ── Ambulance ─────────────────────────────────────────────────
@@ -202,7 +303,7 @@ def create_wildfire_resources(grid_rows: int = 10, grid_cols: int = 10) -> Resou
         capacity=2.0,
         available=2.0,
         mobile=True,
-        metadata={"unit": "patients", "crew_size": 2},
+        metadata={"unit": "patients", "crew_size": 2, "category": "Medical"},
     ))
 
     # ── Hospital ──────────────────────────────────────────────────
@@ -214,36 +315,56 @@ def create_wildfire_resources(grid_rows: int = 10, grid_cols: int = 10) -> Resou
         capacity=50.0,
         available=42.0,
         mobile=False,
-        metadata={"unit": "beds", "trauma_center": True},
+        metadata={"unit": "beds", "trauma_center": True, "category": "Medical"},
     ))
 
-    # ── Helicopter ────────────────────────────────────────────────
+    # ── Heavy Helicopter (H-1) ────────────────────────────────────
     inventory.register(ResourceBase(
         resource_id="heli-1",
         resource_type="helicopter",
         cluster_id="cluster-north",
         grid_row=0, grid_col=5,
-        capacity=4.0,
-        available=4.0,
+        capacity=700.0,
+        available=700.0,
         mobile=True,
-        metadata={"unit": "flight_hours", "type": "Sikorsky S-70"},
+        metadata={
+            "nwcg_id": "H-1",
+            "nwcg_type": 1,
+            "name": "Heavy Helicopter (Type 1)",
+            "unit": "gallons",
+            "capacity_gal": 700,
+            "category": "Aircraft",
+        },
     ))
 
     return inventory
 
 
-def create_full_wildfire_scenario() -> Tuple[
-    GenericWorldEngine[FireCellState], ResourceInventory
-]:
+def create_full_wildfire_scenario(
+    *,
+    use_rothermel: bool = True,
+    cell_size_ft: float = 200.0,
+    time_step_min: float = 5.0,
+) -> Tuple[GenericWorldEngine[FireCellState], ResourceInventory]:
     """
     Convenience function that returns both the engine and resource inventory.
 
     Use this when you want the complete scenario with preparedness assets.
 
+    Parameters
+    ──────────
+    use_rothermel : When True (default), use RothermelFirePhysicsModule.
+    cell_size_ft  : Grid cell spatial extent in feet (Rothermel only).
+    time_step_min : Minutes per simulation tick (Rothermel only).
+
     Returns:
         (engine, resource_inventory) tuple.
     """
-    engine = create_basic_wildfire()
+    engine = create_basic_wildfire(
+        use_rothermel=use_rothermel,
+        cell_size_ft=cell_size_ft,
+        time_step_min=time_step_min,
+    )
     resources = create_wildfire_resources(
         grid_rows=engine.grid.rows,
         grid_cols=engine.grid.cols,

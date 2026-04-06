@@ -13,7 +13,7 @@ Sessions 1–5 build infrastructure (no AI). Sessions 6–10 add agents. Session
 | # | Title | What you build | What you can run |
 |---|-------|---------------|-----------------|
 | 01 | World Engine + Grid | Terrain grid, cell states, environment, tick loop | `engine.tick()` → print snapshot |
-| 02 | Domain Physics — Fire Spread | FirePhysicsModule, ignition, spread rules | Ignite a cell, watch fire spread across grid |
+| 02 | Domain Physics — Fire Spread | RothermelFirePhysicsModule, fuel models, ROS/intensity/danger rating | Ignite a cell, watch fire spread with physics-grounded metrics |
 | 03 | Sensors — Noisy Observations | SensorBase subclasses, emit(), SensorEvent | Read sensors, compare to ground truth |
 | 04 | Sensor Inventory + Publisher | SensorInventory, SensorPublisher, failure modes | `publisher.run()` → events into a queue |
 | 05 | Event Queue + Bridge Consumer | SensorEventQueue, EventBridgeConsumer, async plumbing | Producer/consumer pipeline with logging callback |
@@ -23,7 +23,7 @@ Sessions 1–5 build infrastructure (no AI). Sessions 6–10 add agents. Session
 | 09 | Supervisor Agent — Stub Mode | Send API fan-out, custom reducers, multi-agent | Feed findings → get ActuatorCommands |
 | 10 | Supervisor Agent — LLM Mode | Two ReAct loops (assess + decide), tool composition | LLM correlates across clusters, decides actions |
 | 11 | Resources — Preparedness Assets | ResourceBase, ResourceInventory, scenario knobs | Create resources, query readiness, degrade |
-| 12 | Resources + Supervisor Tools | resource_tools, combined tool binding | Supervisor queries preparedness during assessment |
+| 12 | Resources + Supervisor Tools | resource_tools, fire_behavior_tools, combined tool binding | Supervisor queries preparedness and fire behavior during assessment |
 | 13 | Full Pipeline — Everything Wired | World → sensors → agents → supervisor → commands | Complete simulation with all components |
 | 14 | Scenario Knobs — Preparedness Under Stress | Sensor failures, resource degradation, comparison | Same scenario, degraded conditions → different assessments |
 | 15 | Evaluation — Preparedness Assessment Quality | Compare assessments to actual resource state | Gap detection, recommendation quality, degradation sensitivity |

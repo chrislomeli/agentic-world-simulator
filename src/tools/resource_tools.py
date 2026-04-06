@@ -180,6 +180,32 @@ def check_preparedness(cluster_id: Optional[str] = None) -> Dict[str, Any]:
     if len(out_of_service) > len(resources) * 0.3:
         gaps.append(f"{len(out_of_service)}/{len(resources)} resources out of service")
 
+    # ── Fire behavior-aware gap checks ───────────────────────────
+    # When fire behavior data is available, cross-reference intensity
+    # thresholds against the types present in this cluster/scope.
+    from tools.supervisor_tools import _state as supervisor_state
+    from domains.wildfire.nwcg_resources import INTENSITY_THRESHOLDS
+    fire_behavior = supervisor_state.fire_behavior_summary
+    if fire_behavior:
+        intensity = fire_behavior.get("max_fireline_intensity", 0.0)
+        if intensity > INTENSITY_THRESHOLDS["hand_crew"] and "crew" not in types_present:
+            gaps.append(
+                f"Fireline intensity {intensity:.0f} BTU/ft/s exceeds hand-crew "
+                "threshold but no crews assigned to this scope"
+            )
+        if intensity > INTENSITY_THRESHOLDS["engine"] and "dozer" not in types_present:
+            gaps.append(
+                f"Fireline intensity {intensity:.0f} BTU/ft/s — dozers recommended "
+                "but none assigned to this scope"
+            )
+        if intensity > INTENSITY_THRESHOLDS["dozer"]:
+            aerial_types = {"helicopter", "air_tanker"}
+            if not aerial_types.intersection(types_present):
+                gaps.append(
+                    f"Fireline intensity {intensity:.0f} BTU/ft/s — aerial resources "
+                    "needed but none assigned to this scope"
+                )
+
     return {
         "cluster_id": scope,
         "total_resources": len(resources),

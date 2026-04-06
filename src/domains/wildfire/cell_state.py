@@ -48,6 +48,12 @@ class FireCellState(CellState):
     fire_intensity: float = 0.0
     fire_start_tick: Optional[int] = None
 
+    # Rothermel fire behavior metrics (populated by RothermelFirePhysicsModule)
+    # Zero on unburned/burned cells; updated each tick on burning cells.
+    rate_of_spread_ft_min: float = 0.0
+    flame_length_ft: float = 0.0
+    fireline_intensity_btu_ft_s: float = 0.0
+
     def summary_label(self) -> str:
         """Used by the engine for logging and grid summary counts."""
         return self.fire_state.value
@@ -68,23 +74,44 @@ class FireCellState(CellState):
             return False
         return True
 
-    def ignited(self, tick: int, intensity: float = 0.5) -> "FireCellState":
+    def ignited(
+        self,
+        tick: int,
+        intensity: float = 0.5,
+        rate_of_spread_ft_min: float = 0.0,
+        flame_length_ft: float = 0.0,
+        fireline_intensity_btu_ft_s: float = 0.0,
+    ) -> "FireCellState":
         """
         Return a new state with the cell on fire.
 
         Does NOT mutate self — returns a new instance for use in
         StateEvent. This is the immutable pattern the generic engine
         expects.
+
+        Parameters
+        ──────────
+        tick                      : simulation tick at ignition
+        intensity                 : normalized fire intensity 0.0–1.0
+        rate_of_spread_ft_min     : Rothermel ROS at ignition (ft/min)
+        flame_length_ft           : Byram flame length at ignition (ft)
+        fireline_intensity_btu_ft_s: Byram fireline intensity (BTU/ft/s)
         """
         return self.model_copy(update={
             "fire_state": FireState.BURNING,
             "fire_intensity": max(0.0, min(1.0, intensity)),
             "fire_start_tick": tick,
+            "rate_of_spread_ft_min": rate_of_spread_ft_min,
+            "flame_length_ft": flame_length_ft,
+            "fireline_intensity_btu_ft_s": fireline_intensity_btu_ft_s,
         })
 
     def extinguished(self) -> "FireCellState":
-        """Return a new state with the fire burned out."""
+        """Return a new state with the fire burned out. Zeros out fire behavior metrics."""
         return self.model_copy(update={
             "fire_state": FireState.BURNED,
             "fire_intensity": 0.0,
+            "rate_of_spread_ft_min": 0.0,
+            "flame_length_ft": 0.0,
+            "fireline_intensity_btu_ft_s": 0.0,
         })

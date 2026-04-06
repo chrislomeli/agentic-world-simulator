@@ -1,5 +1,7 @@
 """Tests for ogar.domains.wildfire.cell_state."""
 
+import pytest
+
 from domains.wildfire import (
     FireCellState,
     FireState,
@@ -84,6 +86,47 @@ class TestFireCellState:
         assert state.ignited(tick=0, intensity=1.5).fire_intensity == 1.0
         assert state.ignited(tick=0, intensity=-0.5).fire_intensity == 0.0
 
+    def test_ignited_carries_rothermel_metrics(self):
+        """ignited() should carry through the optional Rothermel metric fields."""
+        state = FireCellState()
+        ignited = state.ignited(
+            tick=3,
+            intensity=0.6,
+            rate_of_spread_ft_min=12.5,
+            flame_length_ft=8.3,
+            fireline_intensity_btu_ft_s=450.0,
+        )
+        assert ignited.rate_of_spread_ft_min == pytest.approx(12.5)
+        assert ignited.flame_length_ft == pytest.approx(8.3)
+        assert ignited.fireline_intensity_btu_ft_s == pytest.approx(450.0)
+
+    def test_ignited_default_metrics_zero(self):
+        """Without explicit metrics, Rothermel fields default to 0.0."""
+        state = FireCellState()
+        ignited = state.ignited(tick=0)
+        assert ignited.rate_of_spread_ft_min == 0.0
+        assert ignited.flame_length_ft == 0.0
+        assert ignited.fireline_intensity_btu_ft_s == 0.0
+
+    def test_extinguished_zeros_metrics(self):
+        """extinguished() must zero out all fire behavior metrics."""
+        state = FireCellState(
+            fire_state=FireState.BURNING,
+            fire_intensity=0.8,
+            fire_start_tick=2,
+            rate_of_spread_ft_min=14.0,
+            flame_length_ft=9.5,
+            fireline_intensity_btu_ft_s=600.0,
+        )
+        ext = state.extinguished()
+        assert ext.fire_state == FireState.BURNED
+        assert ext.fire_intensity == 0.0
+        assert ext.rate_of_spread_ft_min == 0.0
+        assert ext.flame_length_ft == 0.0
+        assert ext.fireline_intensity_btu_ft_s == 0.0
+        # fire_start_tick preserved (for history)
+        assert ext.fire_start_tick == 2
+
     def test_extinguished_returns_new_state(self):
         state = FireCellState(
             fire_state=FireState.BURNING,
@@ -93,8 +136,13 @@ class TestFireCellState:
         ext = state.extinguished()
         assert ext.fire_state == FireState.BURNED
         assert ext.fire_intensity == 0.0
-        # fire_start_tick preserved (for history)
-        assert ext.fire_start_tick == 2
+
+    def test_rothermel_defaults_are_zero(self):
+        """New cells should have all Rothermel metrics at 0.0."""
+        state = FireCellState()
+        assert state.rate_of_spread_ft_min == 0.0
+        assert state.flame_length_ft == 0.0
+        assert state.fireline_intensity_btu_ft_s == 0.0
 
 
 class TestEnumValues:
