@@ -55,6 +55,7 @@ Now we'll wire everything together: **World Engine → Sensors → Queue → Age
 │  7. SUPERVISOR AGENT                                            │
 │  Correlates findings across clusters                            │
 │  • Assesses the overall situation                               │
+│  • Queries resource readiness (if ResourceInventory provided)   │
 │  • Decides what actions to take                                 │
 │  • Issues ActuatorCommands                                      │
 └─────────────────────────────────────────────────────────────────┘
@@ -450,7 +451,7 @@ To add cross-cluster correlation, wire in the supervisor:
 ```python
 from agents.supervisor.graph import build_supervisor_graph
 
-# Build supervisor graph
+# Build supervisor graph (stub mode)
 supervisor_graph = build_supervisor_graph()
 
 # After cluster agents finish, invoke supervisor
@@ -674,17 +675,23 @@ You now have a complete understanding of the pipeline! Here's what to explore ne
    - Replace `build_cluster_agent_graph()` with `build_cluster_agent_graph(llm=llm)`
    - Compare stub vs. LLM performance
 
-3. **Build evaluation scenarios:**
+3. **Add resources for preparedness assessment:**
+   - Use `create_full_wildfire_scenario()` to get engine + resources
+   - Pass `resource_inventory=resources` to `build_supervisor_graph()`
+   - The supervisor LLM can now query firetrucks, ambulances, hospitals, and helicopters
+   - Use `resources.reduce_resources()` or `resources.disable_resources()` to test resilience
+
+4. **Build evaluation scenarios:**
    - Create multiple fire scenarios
    - Run agents on each scenario
    - Measure detection accuracy, false positives, latency
 
-4. **Implement actuators:**
+5. **Implement actuators:**
    - Build Slack/PagerDuty integrations
    - Create drone task dispatcher
    - Add alert routing logic
 
-5. **Scale to multiple clusters:**
+6. **Scale to multiple clusters:**
    - Create 3-5 clusters with different sensor coverage
    - Test cross-cluster correlation
    - Measure supervisor decision quality
@@ -759,6 +766,19 @@ cluster_graph = build_cluster_agent_graph(llm=llm)
 supervisor_graph = build_supervisor_graph(llm=llm)
 ```
 
+### With LLM + Resources
+```python
+from langchain_openai import ChatOpenAI
+from domains.wildfire import create_full_wildfire_scenario
+
+llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+engine, resources = create_full_wildfire_scenario()
+
+cluster_graph = build_cluster_agent_graph(llm=llm)
+supervisor_graph = build_supervisor_graph(llm=llm, resource_inventory=resources)
+# Supervisor can now query resource availability during assessment and decision-making
+```
+
 ### Compare ground truth
 ```python
 # After pipeline runs
@@ -772,12 +792,20 @@ print(f"Agent detected: {len(agent_findings)} anomalies")
 
 ---
 
-## Congratulations!
+## Next Tutorial
 
-You've completed the tutorial series. You now understand:
+Now that you understand the full pipeline, the next tutorial covers:
+- **Part 5: Resources and Preparedness** — How to add firetrucks, hospitals, and other preparedness assets to your scenarios, and how the supervisor LLM queries them during assessment and decision-making.
+
+---
+
+## Series Summary
+
+You now understand:
 - **Part 1:** How the World Engine simulates wildfires
 - **Part 2:** How sensors sample the world and produce noisy readings
 - **Part 3:** How AI agents analyze sensor data and detect anomalies
 - **Part 4:** How to wire everything together into a full pipeline
+- **Part 5:** How resources model preparedness and integrate with agent reasoning
 
 **Happy building!** 🔥🤖

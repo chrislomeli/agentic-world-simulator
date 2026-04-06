@@ -31,7 +31,11 @@ Usage
 from domains.wildfire.cell_state import FireCellState, FireState, TerrainType
 from domains.wildfire.environment import FireEnvironmentState
 from domains.wildfire.physics import FirePhysicsModule
-from domains.wildfire.scenarios import create_basic_wildfire
+from domains.wildfire.scenarios import (
+    create_basic_wildfire,
+    create_full_wildfire_scenario,
+    create_wildfire_resources,
+)
 
 __all__ = [
     "FireCellState",
@@ -40,4 +44,6 @@ __all__ = [
     "FireEnvironmentState",
     "FirePhysicsModule",
     "create_basic_wildfire",
+    "create_full_wildfire_scenario",
+    "create_wildfire_resources",
 ]

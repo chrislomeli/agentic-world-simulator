@@ -313,8 +313,8 @@ START → fan_out_to_clusters → run_cluster_agent (×N clusters)
 ```
 
 Two separate ReAct loops:
-1. **Assess loop** — correlate findings, produce situation summary
-2. **Decide loop** — choose actuator commands based on the assessment
+1. **Assess loop** — correlate findings, query resource readiness, produce situation summary
+2. **Decide loop** — choose actuator commands based on assessment and available resources
 
 ---
 
@@ -334,9 +334,9 @@ class SupervisorState(TypedDict):
 
 ---
 
-### The Four Supervisor Tools
+### Supervisor Tools
 
-Supervisor agents have access to 4 tools (defined in `supervisor_tools.py`):
+Supervisor agents have access to 4 core tools (defined in `supervisor_tools.py`), plus 4 resource tools when a `ResourceInventory` is provided:
 
 #### 1. **`get_all_findings`** — View all findings
 ```python
@@ -368,6 +368,46 @@ check_cross_cluster(anomaly_type="threshold_breach")
 #   "clusters": ["cluster-north", "cluster-south"],
 #   "finding_count": 2,
 #   "summary": "Same anomaly type detected in 2 clusters"
+# }
+```
+
+### Resource Tools (when ResourceInventory is provided)
+
+These tools are defined in `resource_tools.py` and added to the supervisor's tool set when `build_supervisor_graph(resource_inventory=inventory)` is called.
+
+#### 5. **`get_resource_summary`** — Overall readiness
+```python
+get_resource_summary()
+# Returns: {
+#   "total_resources": 5,
+#   "by_type": {"firetruck": {"total": 2, "available": 2, ...}, ...},
+#   "by_cluster": {"cluster-south": 4, "cluster-north": 1},
+#   "by_status": {"AVAILABLE": 5}
+# }
+```
+
+#### 6. **`get_resources_by_cluster`** — What's available near a cluster
+```python
+get_resources_by_cluster(cluster_id="cluster-south")
+# Returns list of resource summaries for that cluster
+```
+
+#### 7. **`get_resources_by_type`** — All resources of a specific type
+```python
+get_resources_by_type(resource_type="firetruck")
+# Returns list of all firetruck summaries with status and capacity
+```
+
+#### 8. **`check_preparedness`** — Is a cluster adequately covered?
+```python
+check_preparedness(cluster_id="cluster-south")
+# Returns: {
+#   "cluster_id": "cluster-south",
+#   "total_resources": 4,
+#   "available_resources": 4,
+#   "resource_types_present": ["firetruck", "ambulance", "hospital"],
+#   "total_capacity": 1052.0,
+#   "gaps": []
 # }
 ```
 
@@ -583,8 +623,9 @@ graph = build_cluster_agent_graph(llm=llm)
 
 ## Next Steps
 
-Now that you understand agents, the final tutorial will cover:
+Now that you understand agents, the next tutorials will cover:
 - **Part 4: The Full Pipeline** — Wiring world → sensors → queue → agents → supervisor → actuators
+- **Part 5: Resources** — Preparedness assets (firetrucks, hospitals) and how the supervisor queries them
 
 ---
 
@@ -629,6 +670,11 @@ graph = build_supervisor_graph()
 
 # LLM mode
 graph = build_supervisor_graph(llm=llm)
+
+# LLM mode with resource awareness
+from domains.wildfire import create_wildfire_resources
+resources = create_wildfire_resources()
+graph = build_supervisor_graph(llm=llm, resource_inventory=resources)
 ```
 
 ### Invoke a supervisor
@@ -657,3 +703,9 @@ commands = result["pending_commands"]
 - `get_findings_by_cluster(cluster_id)`
 - `get_finding_summary()`
 - `check_cross_cluster(anomaly_type)`
+
+**Resource tools (when ResourceInventory provided):**
+- `get_resource_summary()`
+- `get_resources_by_cluster(cluster_id)`
+- `get_resources_by_type(resource_type)`
+- `check_preparedness(cluster_id)`

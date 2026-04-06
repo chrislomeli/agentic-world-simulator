@@ -35,6 +35,7 @@ from typing import Any, Dict, List, Optional
 from langchain_core.tools import tool
 
 from agents.cluster.state import AnomalyFinding
+from resources.inventory import ResourceInventory
 
 
 # ── State store ──────────────────────────────────────────────────────────────
@@ -45,6 +46,7 @@ class _SupervisorToolState:
     """Mutable holder for the current supervisor execution's findings."""
     findings: List[AnomalyFinding] = []
     active_cluster_ids: List[str] = []
+    resource_inventory: Optional[ResourceInventory] = None
 
 
 _state = _SupervisorToolState()
@@ -53,16 +55,19 @@ _state = _SupervisorToolState()
 def set_supervisor_tool_state(
     findings: List[AnomalyFinding],
     active_cluster_ids: List[str],
+    resource_inventory: Optional[ResourceInventory] = None,
 ) -> None:
     """Called by the graph before the LLM/tool loop to load context."""
     _state.findings = list(findings)
     _state.active_cluster_ids = list(active_cluster_ids)
+    _state.resource_inventory = resource_inventory
 
 
 def clear_supervisor_tool_state() -> None:
     """Called after the loop to clean up."""
     _state.findings = []
     _state.active_cluster_ids = []
+    _state.resource_inventory = None
 
 
 # ── Tools ────────────────────────────────────────────────────────────────────

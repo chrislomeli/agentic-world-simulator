@@ -468,6 +468,7 @@ Sensors only cover **part** of the grid. This creates blind spots where fires ca
 Now that you understand sensors, the next tutorial will cover:
 - **Part 3: AI Agents** — How cluster agents analyze sensor events and detect anomalies
 - **Part 4: The Full Pipeline** — Wiring world → sensors → queue → agents → supervisor
+- **Part 5: Resources** — Preparedness assets (firetrucks, hospitals) and how agents query them
 
 ---
 

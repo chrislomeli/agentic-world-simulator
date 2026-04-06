@@ -59,6 +59,8 @@ from actuators.base import ActuatorCommand
 from agents.cluster.graph import cluster_agent_graph
 from agents.cluster.state import ClusterAgentState
 from agents.supervisor.state import SupervisorState
+from resources.inventory import ResourceInventory
+from tools.resource_tools import RESOURCE_TOOLS
 from tools.supervisor_tools import (
     SUPERVISOR_TOOLS,
     clear_supervisor_tool_state,
@@ -255,7 +257,11 @@ def decide_actions(state: SupervisorState) -> dict:
 
 # ── LLM-backed node factories ────────────────────────────────────────────────
 
-def _make_assess_llm_node(llm_with_tools: BaseChatModel, store: Optional[BaseStore] = None):
+def _make_assess_llm_node(
+    llm_with_tools: BaseChatModel,
+    store: Optional[BaseStore] = None,
+    resource_inventory: Optional[ResourceInventory] = None,
+):
     """
     Factory that returns an assess_situation node backed by an LLM.
 
@@ -264,6 +270,9 @@ def _make_assess_llm_node(llm_with_tools: BaseChatModel, store: Optional[BaseSto
 
     When store is provided, past incidents are loaded and appended to the
     user message so the LLM can reason about historical patterns.
+
+    When resource_inventory is provided, it is loaded into the shared tool
+    state so resource tools can query preparedness data.
     """
 
     def assess_situation_llm(state: SupervisorState) -> dict:
@@ -271,8 +280,8 @@ def _make_assess_llm_node(llm_with_tools: BaseChatModel, store: Optional[BaseSto
         cluster_ids = state.get("active_cluster_ids", [])
         messages = state.get("messages", [])
 
-        # Load tool state so tools can access findings.
-        set_supervisor_tool_state(findings, cluster_ids)
+        # Load tool state so tools can access findings and resources.
+        set_supervisor_tool_state(findings, cluster_ids, resource_inventory)
 
         logger.info(
             "Supervisor assess_situation — LLM mode (%d findings, %d clusters)",
@@ -373,12 +382,18 @@ def _parse_assessment(state: SupervisorState) -> dict:
     }
 
 
-def _make_decide_llm_node(llm_with_tools: BaseChatModel):
+def _make_decide_llm_node(
+    llm_with_tools: BaseChatModel,
+    resource_inventory: Optional[ResourceInventory] = None,
+):
     """
     Factory that returns a decide_actions node backed by an LLM.
 
     The LLM reads the situation summary and uses tools to review findings,
     then produces a list of actuator commands.
+
+    When resource_inventory is provided, it is loaded into the shared tool
+    state so resource tools remain available during the decide phase.
     """
 
     def decide_actions_llm(state: SupervisorState) -> dict:
@@ -388,7 +403,7 @@ def _make_decide_llm_node(llm_with_tools: BaseChatModel):
         messages = state.get("messages", [])
 
         # Reload tool state for the decide phase.
-        set_supervisor_tool_state(findings, cluster_ids)
+        set_supervisor_tool_state(findings, cluster_ids, resource_inventory)
 
         logger.info("Supervisor decide_actions — LLM mode")
 
@@ -570,6 +585,7 @@ def route_after_decide(
 def build_supervisor_graph(
     llm: Optional[BaseChatModel] = None,
     store: Optional[BaseStore] = None,
+    resource_inventory: Optional[ResourceInventory] = None,
 ):
     """
     Compile and return the supervisor graph.
@@ -584,6 +600,9 @@ def build_supervisor_graph(
               - dispatch_commands writes situation summary to ("situations", "global")
             Pass the same store instance used by the cluster agent graphs so
             they share the same incident history.
+    resource_inventory : Optional ResourceInventory.  When provided in LLM
+            mode, resource tools are added to the LLM's tool set so it can
+            assess preparedness.  Ignored in stub mode.
 
     Store architecture note
     ───────────────────────
@@ -606,17 +625,24 @@ def build_supervisor_graph(
 
     if llm is not None:
         # ── LLM mode ─────────────────────────────────────────────────
-        llm_with_tools = llm.bind_tools(SUPERVISOR_TOOLS)
+        # When a ResourceInventory is provided, include resource tools
+        # so the LLM can assess preparedness alongside findings.
+        all_tools = SUPERVISOR_TOOLS + (RESOURCE_TOOLS if resource_inventory else [])
+        llm_with_tools = llm.bind_tools(all_tools)
 
         # Assess phase: LLM + tool loop → parse_assessment
         # Pass store to the factory so the LLM sees past incidents in its prompt.
-        builder.add_node("assess_situation", _make_assess_llm_node(llm_with_tools, store=store))
-        builder.add_node("assess_tool_node", ToolNode(SUPERVISOR_TOOLS))
+        builder.add_node("assess_situation", _make_assess_llm_node(
+            llm_with_tools, store=store, resource_inventory=resource_inventory,
+        ))
+        builder.add_node("assess_tool_node", ToolNode(all_tools))
         builder.add_node("parse_assessment", _parse_assessment)
 
         # Decide phase: LLM + tool loop → parse_commands
-        builder.add_node("decide_actions", _make_decide_llm_node(llm_with_tools))
-        builder.add_node("decide_tool_node", ToolNode(SUPERVISOR_TOOLS))
+        builder.add_node("decide_actions", _make_decide_llm_node(
+            llm_with_tools, resource_inventory=resource_inventory,
+        ))
+        builder.add_node("decide_tool_node", ToolNode(all_tools))
         builder.add_node("parse_commands", _parse_commands)
 
         # Wiring: fan_out → cluster agents → assess loop → decide loop

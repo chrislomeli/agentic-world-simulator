@@ -46,7 +46,7 @@ dev = [
 Homepage = "https://github.com/chrislomeli/world-simulator"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/sensors", "src/tools", "src/domains", "src/transport", "src/bridge", "src/world", "src/agents"]
+packages = ["src/sensors", "src/tools", "src/domains", "src/transport", "src/bridge", "src/world", "src/agents", "src/resources"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

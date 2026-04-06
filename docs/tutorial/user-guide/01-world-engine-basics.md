@@ -193,6 +193,7 @@ After each tick, the engine saves a `GenericGroundTruthSnapshot`:
 - `environment` — weather conditions as a dict
 - `domain_summary` — physics-specific summary (burning cells, intensity map, cell counts)
 - `grid_summary` — cell counts by label (`{"BURNING": 3, "BURNED": 1, "UNBURNED": 96}`)
+- `resource_summary` — optional preparedness data (populated by scenario scripts, not the engine)
 
 **The AI agents never see this.** They only see **sensor readings**, which are:
 - **Noisy**: A thermometer might read 34°C when it's actually 35°C
@@ -227,6 +228,24 @@ engine = create_basic_wildfire()
 # Just tick it
 for _ in range(60):
     snapshot = engine.tick()
+```
+
+**With resources (preparedness assets):**
+
+```python
+from domains.wildfire import create_full_wildfire_scenario
+
+# Returns (engine, resource_inventory) tuple
+engine, resources = create_full_wildfire_scenario()
+
+# Resources include:
+#   - 2 firetrucks (south-west and south-east stations)
+#   - 1 ambulance (central south)
+#   - 1 hospital (near urban area, 50 beds)
+#   - 1 helicopter (northern airfield)
+
+# Query resource readiness
+print(resources.readiness_summary())
 ```
 
 **What the basic scenario looks like:**
@@ -302,6 +321,7 @@ Now that you understand the World Engine, the next tutorial will cover:
 - **Part 2: Sensors** — How sensors sample the world and produce events
 - **Part 3: Agents** — How AI agents consume sensor events and detect anomalies
 - **Part 4: The Full Pipeline** — Wiring everything together
+- **Part 5: Resources** — Preparedness assets (firetrucks, hospitals) and how agents query them
 
 ---
 
@@ -345,6 +365,15 @@ current_env = engine.environment
 from domains.wildfire import create_basic_wildfire
 
 engine = create_basic_wildfire()
+engine.run(ticks=60)
+```
+
+### Use a scenario with resources
+```python
+from domains.wildfire import create_full_wildfire_scenario
+
+engine, resources = create_full_wildfire_scenario()
+print(resources.readiness_summary())
 engine.run(ticks=60)
 ```
 

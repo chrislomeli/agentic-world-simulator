@@ -41,7 +41,7 @@ This is essential for comparing agent configurations and regression testing.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Dict, Generic, List, Optional, TypeVar
 
 from world.cell_state import CellState
@@ -70,12 +70,16 @@ class GenericGroundTruthSnapshot:
     state_events    : what changed this tick (serialised StateEvents)
     domain_summary  : domain-specific summary from physics.summarize()
     grid_summary    : cell counts by summary_label (e.g. {"BURNING": 5})
+    resource_summary: optional resource readiness data, populated by the
+                      scenario script or orchestrator (not by the engine).
+                      Empty dict when no ResourceInventory is used.
     """
     tick: int
     environment: Dict[str, Any]
     state_events: List[Dict[str, Any]]
     domain_summary: Dict[str, Any]
     grid_summary: Dict[str, int]
+    resource_summary: Dict[str, Any] = field(default_factory=dict)
 
 
 # ── Generic world engine ─────────────────────────────────────────────────────

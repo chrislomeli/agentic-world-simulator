@@ -78,12 +78,14 @@ branching requires judgment over a space that can't be fully enumerated in advan
 /core
   /world_engine       ← simulation ground truth
   /sensors            ← sensor base class + types
+  /resources          ← preparedness assets (static grid state)
   /actuators          ← actuator base class + types
   /transport          ← Kafka topics, schemas, bridge consumer
   /agents             ← LangGraph subgraphs + Temporal workflows
+  /tools              ← LangGraph tools (sensor, supervisor, resource)
   /memory             ← Postgres checkpointer + pgvector store
 /scenarios
-  /wildfire           ← scenario scripts + sensor configs
+  /wildfire           ← scenario scripts + sensor/resource configs
   /ocean_buoys        ← (future)
   /auv_fleet          ← (future)
   /icu                ← (future)
@@ -175,6 +177,40 @@ They are the "output" side of the system — what agents actually do.
 
 **Critical design note:** Actuator consequences write back to world state. This is what closes
 the loop. Without this, agents are shouting into a void.
+
+---
+
+### Resource Layer
+
+Resources are **static preparedness assets** that exist on the world grid — firetrucks, ambulances,
+hospitals, helicopters. Unlike sensors, they don't emit events or tick automatically. Unlike
+actuators, they don't execute commands. They are **queryable state** that agents use to assess
+readiness and make informed deployment decisions.
+
+**Key design decisions:**
+
+| Decision | Rationale |
+|----------|----------|
+| Pydantic BaseModel, not ABC | Resources *are* data, not behavior. No subclass required. |
+| Status enum (AVAILABLE, DEPLOYED, EN_ROUTE, OUT_OF_SERVICE) | Clean state machine for lifecycle |
+| Capacity/available tracking | Consumable resources (water gallons, hospital beds) |
+| Mobile flag | Firetrucks move, hospitals don't |
+| ResourceInventory mirrors SensorInventory | Same registration, query, and scenario knob patterns |
+
+**Resource types for wildfire scenario:**
+- Firetruck (mobile, capacity = water gallons)
+- Ambulance (mobile, capacity = patient slots)
+- Hospital (fixed, capacity = beds)
+- Helicopter (mobile, capacity = flight hours)
+
+**Agent integration:** LangGraph tools (`resource_tools.py`) let the supervisor LLM query
+resource availability, check preparedness by cluster, and identify coverage gaps.
+
+**Capability boundaries** (explicit, not "fix later"):
+- Resources don't tick (no automatic evolution)
+- Resources don't emit events (queryable state only)
+- No concrete actuators for dispatching resources yet (future, additive)
+- No persistence (in-memory for scenario duration)
 
 ---
 
@@ -367,7 +403,7 @@ in parallel is the perfect natural exercise for it. Prioritize this.
 
 | Skill | Level | What an interviewer wants to hear | Testbed coverage | Where |
 |-------|-------|----------------------------------|-----------------|-------|
-| Tool definition — `@tool` decorator | foundational | Docstring becomes the tool description; type hints become the schema; LLM sees both | covered | `get_sensor_history`, `query_world_state`, `dispatch_drone` |
+| Tool definition — `@tool` decorator | foundational | Docstring becomes the tool description; type hints become the schema; LLM sees both | covered | `get_sensor_history`, `query_world_state`, `dispatch_drone`, `check_preparedness` |
 | ToolNode + `bind_tools` | foundational | `ToolNode` executes tool calls from `AIMessage`; `bind_tools` attaches schema to LLM; standard ReAct loop | covered | Cluster agent tool loop |
 | Tool errors + fallback | mid-level | `ToolNode` catches exceptions and returns `ToolMessage` with error; agent can retry or route differently | partial | Sensor timeout → error message → agent decides to use cached reading |
 | Structured output tools | mid-level | `with_structured_output()` forces schema; use for actuator commands that must be validated before execution | covered | Actuator command schema — agent must produce valid `DroneCommand` |

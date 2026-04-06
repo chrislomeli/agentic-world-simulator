@@ -64,18 +64,27 @@ Defines contract for fire behavior.
 
 ---
 
-### 4. Logistics Simulation
+### 4. Logistics / Resource Layer
 
-Synthetic but structured representation of:
+> **Status: Implemented** as the Resource system (`src/resources/`).
 
-- Fire trucks (location, ETA, capacity)
-- Crews / hotshots
-- Aircraft (range, payload)
-- Water sources (pressure, flow rate)
+Synthetic but structured representation of preparedness assets:
 
-**Requirements:**
-- Must support resource allocation decisions
-- No real GIS required — use grid or abstract locations
+- Fire trucks (location, capacity in gallons, mobile)
+- Ambulances (location, patient capacity, mobile)
+- Hospitals (fixed location, bed capacity)
+- Aircraft / helicopters (location, flight hours, mobile)
+
+**Implementation:**
+- `ResourceBase` (Pydantic model) — status, capacity, grid position, mobility
+- `ResourceInventory` — registration, queries, readiness summaries, scenario knobs
+- `resource_tools.py` — LangGraph tools for supervisor LLM to query preparedness
+- Scenario helpers: `create_wildfire_resources()`, `create_full_wildfire_scenario()`
+
+**Requirements (met):**
+- Supports resource allocation decisions via agent tools
+- No real GIS required — uses grid positions
+- Scenario knobs for testing degraded preparedness (reduce, disable)
 
 ---
 

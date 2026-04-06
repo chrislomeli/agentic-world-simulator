@@ -24,9 +24,13 @@ will the fire jump the ridge?  The agent has to monitor both sides.
 
 from __future__ import annotations
 
+from typing import Tuple
+
 from domains.wildfire.cell_state import FireCellState, FireState, TerrainType
 from domains.wildfire.environment import FireEnvironmentState
 from domains.wildfire.physics import FirePhysicsModule
+from resources.base import ResourceBase, ResourceStatus
+from resources.inventory import ResourceInventory
 from world.generic_engine import GenericWorldEngine
 from world.generic_grid import GenericTerrainGrid
 
@@ -139,3 +143,109 @@ def create_basic_wildfire() -> GenericWorldEngine[FireCellState]:
     engine.inject_state(7, 2, ignition_state)
 
     return engine
+
+
+def create_wildfire_resources(grid_rows: int = 10, grid_cols: int = 10) -> ResourceInventory:
+    """
+    Create a ResourceInventory with sample preparedness assets for the
+    basic wildfire scenario.
+
+    Resource layout (matching the 10×10 basic wildfire grid):
+
+      Firetrucks:
+        firetruck-1  : cluster-south, at (9, 0) — south-west station
+        firetruck-2  : cluster-south, at (9, 9) — south-east station
+
+      Ambulance:
+        ambulance-1  : cluster-south, at (8, 5) — central south
+
+      Hospital:
+        hospital-1   : cluster-south, at (7, 9) — near urban area, 50 beds
+
+      Helicopter:
+        heli-1       : cluster-north, at (0, 5) — northern airfield
+
+    This mirrors a realistic deployment: fire assets near the ignition
+    zone (south), medical assets near the urban area (south-east),
+    aerial assets at a remote airfield (north).
+    """
+    inventory = ResourceInventory(grid_rows=grid_rows, grid_cols=grid_cols)
+
+    # ── Firetrucks ────────────────────────────────────────────────
+    inventory.register(ResourceBase(
+        resource_id="firetruck-1",
+        resource_type="firetruck",
+        cluster_id="cluster-south",
+        grid_row=9, grid_col=0,
+        capacity=500.0,
+        available=500.0,
+        mobile=True,
+        metadata={"unit": "gallons", "crew_size": 4, "model": "Type 1"},
+    ))
+    inventory.register(ResourceBase(
+        resource_id="firetruck-2",
+        resource_type="firetruck",
+        cluster_id="cluster-south",
+        grid_row=9, grid_col=9,
+        capacity=500.0,
+        available=500.0,
+        mobile=True,
+        metadata={"unit": "gallons", "crew_size": 4, "model": "Type 3"},
+    ))
+
+    # ── Ambulance ─────────────────────────────────────────────────
+    inventory.register(ResourceBase(
+        resource_id="ambulance-1",
+        resource_type="ambulance",
+        cluster_id="cluster-south",
+        grid_row=8, grid_col=5,
+        capacity=2.0,
+        available=2.0,
+        mobile=True,
+        metadata={"unit": "patients", "crew_size": 2},
+    ))
+
+    # ── Hospital ──────────────────────────────────────────────────
+    inventory.register(ResourceBase(
+        resource_id="hospital-1",
+        resource_type="hospital",
+        cluster_id="cluster-south",
+        grid_row=7, grid_col=9,
+        capacity=50.0,
+        available=42.0,
+        mobile=False,
+        metadata={"unit": "beds", "trauma_center": True},
+    ))
+
+    # ── Helicopter ────────────────────────────────────────────────
+    inventory.register(ResourceBase(
+        resource_id="heli-1",
+        resource_type="helicopter",
+        cluster_id="cluster-north",
+        grid_row=0, grid_col=5,
+        capacity=4.0,
+        available=4.0,
+        mobile=True,
+        metadata={"unit": "flight_hours", "type": "Sikorsky S-70"},
+    ))
+
+    return inventory
+
+
+def create_full_wildfire_scenario() -> Tuple[
+    GenericWorldEngine[FireCellState], ResourceInventory
+]:
+    """
+    Convenience function that returns both the engine and resource inventory.
+
+    Use this when you want the complete scenario with preparedness assets.
+
+    Returns:
+        (engine, resource_inventory) tuple.
+    """
+    engine = create_basic_wildfire()
+    resources = create_wildfire_resources(
+        grid_rows=engine.grid.rows,
+        grid_cols=engine.grid.cols,
+    )
+    return engine, resources
