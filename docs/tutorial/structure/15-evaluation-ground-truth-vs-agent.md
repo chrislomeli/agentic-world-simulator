@@ -1,77 +1,98 @@
-# Session 15: Evaluation — Ground Truth vs. Agent
+# Session 15: Evaluation — Preparedness Assessment Quality
 
 ## Goal
-Compare what actually happened (ground truth snapshots) with what the agent detected (findings). Compute detection accuracy, false positive rate, and response latency.
+Evaluate the quality of the supervisor's **preparedness assessments** across different scenarios. The question isn't "did the agent predict the fire?" — it's "did the agent correctly identify fire potential, assess resource readiness, and recommend appropriate responses?"
 
 ## Rubric Skills Introduced
 - None new (evaluation layer on top of existing skills)
 
+## Why Not Detection Accuracy?
+Binary prediction ("fire will happen" / "fire won't") puts the agent in a win-lose position with no real ML model behind it. Preparedness assessment is different:
+- **"High fire potential"** is always defensible given dry conditions and sensor data
+- **"Cluster-south lacks helicopter coverage"** is a verifiable fact about resource state
+- **False positives are caution**, not errors — exactly what preparedness should produce
+
+Ground truth still matters — but as context for evaluating the assessment, not as a binary scorecard.
+
 ## Key Concepts
-- **GenericGroundTruthSnapshot** — tick-by-tick record of actual world state
-- **engine.history** — list of all snapshots from the run
-- **AnomalyFinding** — what the agent detected
-- **Metrics** — true positives, false positives, missed detections, detection delay
+- **Fire potential assessment** — did the supervisor identify elevated risk from sensor conditions?
+- **Resource gap analysis** — did it correctly identify which clusters are under-covered?
+- **Recommendation quality** — did the commands match the resource gaps?
+- **Degradation sensitivity** — did assessments change appropriately when conditions worsened?
 
 ## What You Build
-1. Run a full pipeline (from Session 13)
-2. Extract ground truth from engine.history
-3. Extract agent findings from the pipeline
-4. Compare: which fires were detected? which were missed?
-5. Compute basic metrics
+1. Run full pipeline across multiple scenarios (from Session 14)
+2. Collect supervisor assessments and commands from each run
+3. Compare assessments against known resource state
+4. Evaluate whether recommendations match the actual gaps
 
 ## What You Can Run
 ```python
 from domains.wildfire import create_full_wildfire_scenario
 
-engine, resources = create_full_wildfire_scenario()
+def evaluate_assessment(label, resource_disable_frac=0.0):
+    engine, resources = create_full_wildfire_scenario()
 
-# ... run full pipeline, collect findings ...
+    if resource_disable_frac > 0:
+        resources.disable_resources("firetruck", fraction=resource_disable_frac)
 
-# Ground truth: when did fires start?
-fire_ticks = []
-for snapshot in engine.history:
-    burning = snapshot.grid_summary.get("BURNING", 0)
-    if burning > 0:
-        fire_ticks.append(snapshot.tick)
+    # ... run full pipeline, collect supervisor result ...
 
-print(f"Fire active from tick {min(fire_ticks)} to {max(fire_ticks)}")
-print(f"Peak burning cells: {max(s.grid_summary.get('BURNING', 0) for s in engine.history)}")
+    # Ground truth: what was the actual resource state?
+    readiness = resources.readiness_summary()
+    actual_gaps = []
+    for cluster_id in ["cluster-north", "cluster-south"]:
+        prep = resources.check_preparedness(cluster_id)
+        if prep["gaps"]:
+            actual_gaps.append((cluster_id, prep["gaps"]))
 
-# Agent findings: when did agents detect anomalies?
-detection_ticks = [f["raw_context"].get("trigger_event_id") for f in findings]
-print(f"Agent produced {len(findings)} findings")
+    # What did the supervisor assess?
+    summary = result["situation_summary"]
+    commands = result["pending_commands"]
 
-# Basic metrics
-total_burning_ticks = len(fire_ticks)
-detected_count = len(findings)
-print(f"Detection rate: {detected_count}/{total_burning_ticks} ticks with active fire")
+    print(f"\n--- {label} ---")
+    print(f"  Supervisor summary: {summary[:150]}")
+    print(f"  Commands: {len(commands)}")
+    for cmd in commands:
+        print(f"    [{cmd.command_type}] → {cmd.cluster_id}")
+    print(f"  Actual resource gaps: {actual_gaps}")
 
-# Resource utilization at end
-summary = resources.readiness_summary()
-for rtype, info in summary["by_type"].items():
-    util = 1 - (info["available_capacity"] / info["total_capacity"]) if info["total_capacity"] > 0 else 0
-    print(f"  {rtype}: {util:.0%} utilized")
+    # Evaluation: did the supervisor's assessment match reality?
+    mentioned_gaps = any("gap" in summary.lower() or "unavailable" in summary.lower()
+                        for _ in [1])
+    print(f"  Mentioned gaps: {mentioned_gaps}")
+    print(f"  Actual gaps exist: {len(actual_gaps) > 0}")
+    if actual_gaps and not mentioned_gaps:
+        print(f"  ⚠ MISS: gaps exist but supervisor didn't mention them")
+    if mentioned_gaps and not actual_gaps:
+        print(f"  ℹ Supervisor noted potential gaps (conservative — acceptable)")
+
+evaluate_assessment("Baseline — full resources")
+evaluate_assessment("50% firetrucks disabled", resource_disable_frac=0.5)
+evaluate_assessment("All firetrucks disabled", resource_disable_frac=1.0)
 ```
 
 ## Evaluation Dimensions
 
-| Metric | What it measures | How to compute |
-|--------|-----------------|----------------|
-| Detection rate | % of fire ticks with at least one finding | findings / burning ticks |
-| False positive rate | Findings when no fire exists | findings with no corresponding ground truth |
-| Detection latency | Ticks between fire start and first finding | first finding tick - first burning tick |
-| Resource awareness | Did supervisor mention resources? | Check situation_summary for resource references |
-| Decision quality | Did commands match the situation? | Manual review of ActuatorCommands vs. ground truth |
+| Dimension | What it measures | How to evaluate |
+|-----------|-----------------|----------------|
+| Risk identification | Did the agent note fire potential from sensor conditions? | Check situation_summary for risk language |
+| Gap detection | Did it identify under-covered clusters? | Compare summary to check_preparedness() output |
+| Recommendation quality | Do commands address the actual gaps? | Match command targets to clusters with gaps |
+| Degradation sensitivity | Did assessment urgency increase as conditions worsened? | Compare summaries across scenarios |
+| Conservative bias | Does it err on the side of caution? | False positives are acceptable; missed gaps are not |
 
 ## Key Files
 - `src/world/generic_engine.py` — GenericGroundTruthSnapshot, engine.history
-- `src/agents/cluster/state.py` — AnomalyFinding (raw_context contains trigger info)
+- `src/resources/inventory.py` — check_preparedness(), readiness_summary()
+- `src/agents/supervisor/state.py` — SupervisorState (situation_summary, pending_commands)
 
 ## Verification
-- Ground truth shows fire starting and spreading
-- Agent findings correlate with actual fire activity
-- Detection latency is measurable (not zero — sensors are noisy)
-- Degraded scenarios (from Session 14) show worse metrics
+- Baseline: supervisor reports adequate preparedness (no gaps to find)
+- Disabled firetrucks: supervisor identifies coverage gaps or recommends redeployment
+- Full degradation: supervisor escalates with strongest urgency
+- Assessment quality improves with more resource tools available
+- Conservative bias: supervisor may flag potential issues even when none exist (acceptable)
 
 ## What You've Built
 At this point you have a complete, runnable testbed:
@@ -81,4 +102,4 @@ At this point you have a complete, runnable testbed:
 - LangGraph supervisor with Send API fan-out
 - Resources with preparedness querying
 - Scenario knobs for resilience testing
-- Evaluation framework for measuring agent quality
+- **Evaluation framework measuring preparedness assessment quality, not binary prediction**

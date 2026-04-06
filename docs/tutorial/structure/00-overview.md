@@ -25,8 +25,8 @@ Sessions 1–5 build infrastructure (no AI). Sessions 6–10 add agents. Session
 | 11 | Resources — Preparedness Assets | ResourceBase, ResourceInventory, scenario knobs | Create resources, query readiness, degrade |
 | 12 | Resources + Supervisor Tools | resource_tools, combined tool binding | Supervisor queries preparedness during assessment |
 | 13 | Full Pipeline — Everything Wired | World → sensors → agents → supervisor → commands | Complete simulation with all components |
-| 14 | Scenario Knobs — Resilience Testing | Sensor failures, resource degradation, comparison | Run same scenario degraded vs. healthy |
-| 15 | Evaluation — Ground Truth vs. Agent | Compare snapshots to findings, measure accuracy | Detection metrics, false positive rates |
+| 14 | Scenario Knobs — Preparedness Under Stress | Sensor failures, resource degradation, comparison | Same scenario, degraded conditions → different assessments |
+| 15 | Evaluation — Preparedness Assessment Quality | Compare assessments to actual resource state | Gap detection, recommendation quality, degradation sensitivity |
 
 ---
 
