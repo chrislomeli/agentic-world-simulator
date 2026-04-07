@@ -14,7 +14,7 @@ import random
 
 import pytest
 
-from domains.wildfire import create_basic_wildfire, create_full_wildfire_scenario
+from domains.wildfire.scenarios import create_basic_wildfire, create_full_wildfire_scenario
 from domains.wildfire.nwcg_resources import suppression_category
 from domains.wildfire.rothermel_physics import RothermelFirePhysicsModule
 from tools.fire_behavior_tools import (

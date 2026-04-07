@@ -1,7 +1,6 @@
 from world.generic_engine import GenericWorldEngine, GenericGroundTruthSnapshot
 from world.environment import EnvironmentState
 from world.physics import PhysicsModule, StateEvent
-from world.sensor_inventory import SensorInventory
 from world.weather import WeatherState
 
 """

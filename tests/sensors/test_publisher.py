@@ -8,7 +8,7 @@ from sensors.base import SensorBase, FailureMode
 from sensors import SensorPublisher
 from transport import SensorEventQueue
 from transport import SensorEvent
-from world import SensorInventory
+from world.sensor_inventory import SensorInventory
 
 
 class _FakeSensor(SensorBase):

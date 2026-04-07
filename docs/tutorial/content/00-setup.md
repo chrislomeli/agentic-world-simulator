@@ -147,6 +147,7 @@ You can copy it from the tutorial repo or create your own. The easiest approach:
 (note: you must have added the remote tutorial repository and fetched it)
 ```bash
 git show tutorial/main:pyproject.toml > pyproject.toml
+git show tutorial/main:.gitignore > .gitignore
 ```
 
 **Option B: Create your own**
@@ -196,6 +197,7 @@ packages = ["src/sensors", "src/tools", "src/domains", "src/transport", "src/bri
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 asyncio_mode = "auto"
+pythonpath = ["src"]
 ```
 
 **Key dependencies explained:**
@@ -355,114 +357,150 @@ Next steps:
 
 **When you need this:** Sessions 07, 10, and beyond use LLM-powered agents. Sessions 01–06 work without any API keys (they use stub/deterministic agents).
 
-LangChain automatically reads API keys from environment variables. You have two options:
+The project uses `pydantic-settings` to manage configuration. It reads from a `.env` file pointed to by the `AI_ENV_FILE` environment variable.
 
-### Option A: Export in your shell (simple, temporary)
+**Step 7a — Create your `.env` file**
 
-```bash
-export OPENAI_API_KEY=sk-...
-```
-
-This works for the current terminal session only. You'll need to re-export if you close the terminal.
-
-### Option B: Use a `.env` file (persistent, recommended)
-
-Create a `.env` file in the project root:
+Create a `.env` file in your project root (never commit this file):
 
 ```bash
-# OpenAI API key (required for LLM agents in Sessions 07+)
+# LLM credentials (required for Sessions 07+)
 OPENAI_API_KEY=sk-...
 
-# LangSmith tracing (optional, for debugging)
-LANGCHAIN_TRACING_V2=true
+# LangSmith tracing (optional, for debugging agent runs)
 LANGCHAIN_API_KEY=lsv2_pt_...
+LANGCHAIN_TRACING_V2=true
 LANGCHAIN_PROJECT=wildfire-simulation
+LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
 ```
 
-**Important:** Add `.env` to your `.gitignore` to avoid committing secrets:
+**Step 7b — Point `AI_ENV_FILE` at it**
+
+Add this to your shell profile (`~/.zshrc` or `~/.bashrc`) so it persists across sessions:
 
 ```bash
-echo ".env" >> .gitignore
+export AI_ENV_FILE=/path/to/your/wildfire-project/.env
 ```
 
-LangChain will automatically load these variables when you import `langchain_openai` or other LangChain modules.
+Then reload your shell:
+
+```bash
+source ~/.zshrc  # or ~/.bashrc
+```
+
+**Step 7c — Verify `.env` is in `.gitignore`**
+
+```bash
+grep -q "^\.env" .gitignore || echo ".env" >> .gitignore
+```
 
 ---
 
 ## Step 8: Verify API key setup (for LLM sessions)
 
-Before running LLM-powered sessions, verify your API key is accessible:
+Before running LLM-powered sessions, verify your configuration loads correctly via `get_settings()`.
 
 **`verify_api_key.py`:**
 
 ```python
 #!/usr/bin/env python3
-"""Verify that OpenAI API key is set and valid."""
+"""Verify that API keys are loading correctly via pydantic-settings."""
 
 import os
 import sys
 
-def check_api_key():
-    """Check if OPENAI_API_KEY is set in environment."""
-    api_key = os.getenv("OPENAI_API_KEY")
-    
-    if not api_key:
-        print("✗ OPENAI_API_KEY not set")
-        print("\nTo fix this, either:")
-        print("  1. Export in your shell:")
-        print("     export OPENAI_API_KEY=sk-...")
-        print("  2. Create a .env file with:")
-        print("     OPENAI_API_KEY=sk-...")
+def check_env_file():
+    """Check that AI_ENV_FILE is set and the file exists."""
+    env_file = os.getenv("AI_ENV_FILE")
+    if not env_file:
+        print("✗ AI_ENV_FILE not set")
+        print("  Add this to your shell profile and reload:")
+        print("    export AI_ENV_FILE=/path/to/your/project/.env")
         return False
-    
-    if not api_key.startswith("sk-"):
-        print(f"✗ OPENAI_API_KEY looks invalid (doesn't start with 'sk-')")
-        print(f"   Current value: {api_key[:10]}...")
+    if not os.path.exists(env_file):
+        print(f"✗ .env file not found at: {env_file}")
+        print("  Create the file or update AI_ENV_FILE to point at the right path")
         return False
-    
-    print(f"✓ OPENAI_API_KEY is set ({api_key[:10]}...)")
-    
-    # Optional: test the key with a simple API call
+    print(f"✓ AI_ENV_FILE set and file exists ({env_file})")
+    return True
+
+def check_settings():
+    """Load settings directly via pydantic-settings and verify required keys."""
+    try:
+        from pydantic_settings import BaseSettings, SettingsConfigDict
+
+        class VerifySettings(BaseSettings):
+            openai_api_key: str = ""
+            langchain_api_key: str = ""
+            langchain_tracing_v2: bool = False
+            langchain_project: str = "ogar"
+            model_config = SettingsConfigDict(
+                env_file=os.getenv("AI_ENV_FILE"),
+                env_file_encoding="utf-8",
+                extra="ignore",
+            )
+
+        settings = VerifySettings()
+    except ImportError:
+        print("✗ pydantic-settings not installed (run: uv pip install -e .)")
+        return False
+
+    ok = True
+
+    if settings.openai_api_key:
+        print(f"✓ OPENAI_API_KEY loaded ({settings.openai_api_key[:10]}...)")
+    else:
+        print("✗ OPENAI_API_KEY not set in .env (required for Sessions 07+)")
+        ok = False
+
+    if settings.langchain_api_key and settings.langchain_tracing_v2:
+        print(f"✓ LangSmith tracing enabled (project: {settings.langchain_project})")
+    else:
+        print("ℹ LangSmith tracing not configured (optional)")
+
+    return ok, settings
+
+def check_api_call(settings):
+    """Optionally make a live API call to confirm the key works."""
     try:
         from langchain_openai import ChatOpenAI
-        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, api_key=settings.openai_api_key)
         response = llm.invoke("Say 'API key works'")
         print(f"✓ API key verified (test call successful)")
         print(f"  Response: {response.content}")
         return True
     except ImportError:
-        print("ℹ langchain-openai not installed (run: uv pip install -e '.[llm]')")
-        print("  Skipping API validation test")
+        print("ℹ langchain-openai not installed — skipping live test (run: uv pip install -e '.[llm]')")
         return True
     except Exception as e:
-        print(f"✗ API key test failed: {e}")
-        print("  Your key might be invalid or expired")
+        err = str(e)
+        if "429" in err or "insufficient_quota" in err or "rate limit" in err.lower():
+            print("⚠ API key is set but quota exceeded or rate limited")
+            print("  Check your OpenAI plan and billing at https://platform.openai.com/account/billing")
+            print("  Your key is likely valid — this won't block Sessions 01-06")
+            return True  # key loaded correctly, billing issue is separate
+        print(f"✗ API call failed: {e}")
         return False
-
-def check_langsmith():
-    """Check if LangSmith tracing is configured (optional)."""
-    tracing = os.getenv("LANGCHAIN_TRACING_V2")
-    api_key = os.getenv("LANGCHAIN_API_KEY")
-    
-    if tracing and api_key:
-        print(f"✓ LangSmith tracing enabled")
-        print(f"  Project: {os.getenv('LANGCHAIN_PROJECT', 'default')}")
-    else:
-        print("ℹ LangSmith tracing not configured (optional)")
 
 def main():
     print("Checking API key configuration...\n")
-    
-    api_ok = check_api_key()
+
+    if not check_env_file():
+        print("\n" + "="*50)
+        print("✗ Fix AI_ENV_FILE before continuing")
+        return 1
+
     print()
-    check_langsmith()
-    
+    settings_ok, settings = check_settings()
+    print()
+    api_ok = check_api_call(settings) if settings_ok else False
+
     print("\n" + "="*50)
-    if api_ok:
+    if settings_ok and api_ok:
         print("✓ Ready for LLM-powered sessions!")
         return 0
     else:
-        print("✗ Fix API key issues before running LLM sessions")
+        print("✗ Fix the issues above before running LLM sessions")
         print("  (Sessions 01-06 work without API keys)")
         return 1
 
@@ -481,11 +519,13 @@ python verify_api_key.py
 ```
 Checking API key configuration...
 
-✓ OPENAI_API_KEY is set (sk-proj-ab...)
+✓ AI_ENV_FILE set and file exists (/path/to/project/.env)
+
+✓ OPENAI_API_KEY loaded (sk-proj-ab...)
+✓ LangSmith tracing enabled (project: wildfire-simulation)
+
 ✓ API key verified (test call successful)
   Response: API key works
-
-ℹ LangSmith tracing not configured (optional)
 
 ==================================================
 ✓ Ready for LLM-powered sessions!
@@ -496,39 +536,21 @@ Checking API key configuration...
 ```
 Checking API key configuration...
 
-✗ OPENAI_API_KEY not set
-
-To fix this, either:
-  1. Export in your shell:
-     export OPENAI_API_KEY=sk-...
-  2. Create a .env file with:
-     OPENAI_API_KEY=sk-...
-
-ℹ LangSmith tracing not configured (optional)
+✗ AI_ENV_FILE not set
+  Add this to your shell profile and reload:
+    export AI_ENV_FILE=/path/to/your/project/.env
 
 ==================================================
-✗ Fix API key issues before running LLM sessions
-  (Sessions 01-06 work without API keys)
+✗ Fix AI_ENV_FILE before continuing
 ```
 
 ---
 
 ## Step 9: Create initial project structure
 
-You can copy the directory structure from the tutorial or create it manually.
+Create core modules and placeholder `__init__.py` files to make directories importable:
 
-**Option A: Copy from the tutorial (recommended)**
-
-```bash
-# Copy the entire src/ directory from tutorial
-git checkout tutorial/main -- src/
-mkdir -p tests
-touch tests/__init__.py
-```
-
-**Option B: Create manually**
-
-Create placeholder `__init__.py` files to make directories importable:
+We are not really using all of these folders, so you could create them as you need them, but the tutorials will assume they are already there. 
 
 ```bash
 # Core modules

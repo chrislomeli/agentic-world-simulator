@@ -33,7 +33,7 @@ from agents.cluster.graph import build_cluster_agent_graph
 from agents.supervisor.graph import build_supervisor_graph
 from bridge.consumer import EventBridgeConsumer
 from config import get_settings
-from domains.wildfire import create_basic_wildfire
+from domains.wildfire.scenarios import create_basic_wildfire
 from domains.wildfire.sensors import (
     HumiditySensor,
     SmokeSensor,

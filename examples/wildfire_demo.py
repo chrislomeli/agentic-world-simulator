@@ -30,7 +30,7 @@ from pathlib import Path
 # Add src/ to path when running directly (not needed with pip install -e .)
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from domains.wildfire import create_basic_wildfire
+from domains.wildfire.scenarios import create_basic_wildfire
 from world.sensor_inventory import SensorInventory
 from domains.wildfire.sensors import (
     TemperatureSensor,

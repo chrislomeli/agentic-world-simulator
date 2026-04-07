@@ -1,6 +1,6 @@
 """Tests for domains.wildfire.scenarios — create_basic_wildfire."""
 
-from domains.wildfire import create_basic_wildfire
+from domains.wildfire.scenarios import create_basic_wildfire
 from domains.wildfire import TerrainType, FireState
 from world import GenericWorldEngine, GenericGroundTruthSnapshot
 

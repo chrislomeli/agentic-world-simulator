@@ -1,126 +1,288 @@
-# Episode 1, Session 1: The Simulated World
-
-> **What we're building:** A terrain grid, typed cell states, a global environment, and a tick loop.
-> **Why we need it:** Every sensor reading, every agent decision, every resource deployment in this system happens in response to something happening in the world. This session builds that world — the ground truth the agent will never see directly.
-> **What you'll have at the end:** A running engine you can tick forward and inspect, with a snapshot of the world's state at every step.
+# Session 1: The Infrastructure
 
 ---
 
-## Why simulation?
+## What you're doing and why
 
-If you want to test whether an agent responds well to a wildfire, you need a wildfire. But you also need to be able to run that wildfire hundreds of times, inject sensor failures, degrade resources, rewind to a specific moment, and compare what the agent *assessed* against what was *actually happening*.
+Before you can build an agent, you need something for it to work with: a world that generates events, sensors that observe it, a transport layer that delivers observations, and resources that the agent can reason about.
 
-A real fire doesn't give you any of that. A simulation does.
+**You will not write any of this code.** This session copies the infrastructure in, verifies it works, and walks you through what each component produces. You need to understand the data shapes and the flow — not the internals.
 
-The other thing a simulation gives you is a clean separation between **ground truth** and **observation**. In a real emergency, an incident commander only knows what their sensors and scouts report — a noisy, incomplete, delayed picture. That's the same position we want our agent in. The simulation runs the actual fire physics; the agent only sees what its sensors emit. We'll maintain that separation throughout this entire tutorial.
-
-This session builds the simulation layer. No sensors yet, no agents — just the world evolving on its own.
-
----
-
-## The architecture at a glance
-
-The simulation has four moving parts that compose together:
-
-**`GenericTerrainGrid`** is a 2D grid of cells. Each cell holds a `CellState` — a typed Pydantic model that describes what that cell currently looks like. For wildfire, that means terrain type, fuel moisture, slope, and fire state. The grid doesn't know anything about fire; it just stores whatever cell state type you give it.
-
-**`EnvironmentState`** holds global conditions that apply everywhere: temperature, humidity, wind speed and direction. The environment evolves each tick via a bounded random walk — temperature drifts, wind shifts, humidity responds inversely to temperature. It's not a weather model, but it produces realistic-feeling variation.
-
-**`PhysicsModule`** is where the domain logic lives. Each tick it receives the current grid and environment and returns a list of `StateEvent` objects — instructions for which cells should change to which new states. Critically, the physics module *does not mutate cells directly*. It produces change descriptions, and the engine applies them. This is a design choice we'll come back to.
-
-**`GenericWorldEngine`** is the orchestrator. Each tick: the environment evolves, the physics module runs, state events are applied to the grid, and a `GenericGroundTruthSnapshot` is recorded. The engine doesn't know what a fire is — it just drives the loop. All domain knowledge lives in the physics module and cell states.
-
-This separation — engine vs. domain — is intentional. Sessions 01 and 02 introduce the fire domain. But the same engine could run a flood simulation, a power grid failure, or a hospital surge scenario. Only the cell states, environment, and physics module would change.
+By the end of this session you will have:
+- All infrastructure code in place and passing tests
+- A clear picture of the data pipeline: world → sensors → transport → agent
+- An understanding of what your agent will see, and what it won't
 
 ---
 
-## Cell states: immutable by design
+## Get the code
 
-A `FireCellState` holds everything that describes one cell of terrain:
+Copy everything from the tutorial repo:
 
-```python
-class FireCellState(CellState):
-    terrain_type: TerrainType = TerrainType.GRASSLAND
-    vegetation: float = 0.5
-    fuel_moisture: float = 0.3
-    slope: float = 0.0
-    fire_state: FireState = FireState.UNBURNED
-    fire_intensity: float = 0.0
-    fire_start_tick: Optional[int] = None
+```bash
+git checkout tutorial/main -- src/world/
+git checkout tutorial/main -- src/domains/
+git checkout tutorial/main -- src/sensors/
+git checkout tutorial/main -- src/transport/
+git checkout tutorial/main -- src/bridge/
+git checkout tutorial/main -- src/resources/
+git checkout tutorial/main -- src/config.py
+git checkout tutorial/main -- tests/
 ```
 
-It's a Pydantic model, and we treat it as immutable. When a cell needs to change state — say, when it catches fire — we don't mutate the existing object. Instead we call `cell_state.ignited(tick=5, intensity=0.8)`, which returns a *new* `FireCellState` with the fire fields updated and everything else preserved. The original is untouched.
+Install and verify:
 
-This is what makes the `StateEvent` pattern work cleanly. The physics module builds a list of `StateEvent(row=r, col=c, new_state=new_cell_state)` objects and returns them. The engine applies each one atomically. There's no partial-update problem, no threading concern, and it's easy to test: feed a cell state into a function, get a new cell state out, check it.
+```bash
+uv pip install -e ".[llm]" --group dev
+pytest tests/world/ tests/domains/ tests/sensors/ tests/transport/ -v
+```
 
-The `CellState` base class lives in `src/world/cell_state.py`. You won't need to touch it — it just requires subclasses to implement `summary_label()`, which the engine uses for logging and grid summary counts.
+All these tests should pass. If anything fails, check that your virtual environment is active and dependencies are installed.
 
----
-
-## The tick loop
-
-Here's what happens when you call `engine.tick()`:
-
-1. `environment.tick()` — weather takes a random step within its bounds
-2. `physics.tick_physics(grid, environment, tick)` — domain rules run, returns `List[StateEvent]`
-3. The engine applies each `StateEvent` to the grid
-4. A `GenericGroundTruthSnapshot` is created and appended to `engine.history`
-
-The snapshot contains the tick number, the current environment as a dict, a grid summary (cell counts by label), and a `domain_summary` from `physics.summarize()`. That last field is where domain-specific outputs live — for fire, that'll be the list of burning cells, fire intensity maps, and later the Rothermel physics metrics. More on that in Session 02.
-
-You can also call `engine.run(ticks=N)` to run multiple ticks at once and get back the list of snapshots.
+> **Note:** The `tests/bridge/` and `tests/resources/` directories contain tests that depend on agent and tool code you'll build in later sessions. They won't pass yet — that's expected. The tests above cover all the infrastructure you just copied.
 
 ---
 
-## The pre-built scenario
+## The data pipeline
 
-The wildfire domain ships with a pre-built scenario that sets up a realistic 10×10 grid:
+Here's how data flows through the system. Your agent sits at the right end — it only sees what arrives through this pipeline:
+
+```
+World Engine          Sensors              Transport           Agent
+(ground truth)   →   (noisy observations) →  (queue + routing) →  (your code)
+                                                                     ↑
+Resources ──────────────────────────────────────────────────────────┘
+(queryable assets)
+```
+
+The agent never sees the world directly. It sees sensor events and can query resources. That gap between ground truth and observation is the whole point — it's what makes the agent's job interesting and testable.
+
+---
+
+## The World Engine: what it produces
+
+The world engine simulates a wildfire spreading across a 10x10 grid, tick by tick. Each tick it advances weather, runs fire physics, and records a snapshot.
+
+**What comes out each tick:**
 
 ```python
-from domains.wildfire import create_basic_wildfire
+snapshot = engine.tick()
+
+snapshot.tick              # 5 (which tick this is)
+snapshot.grid_summary      # {'UNBURNED': 94, 'BURNING': 5, 'BURNED': 1}
+snapshot.domain_summary    # fire behavior metrics (see below)
+snapshot.environment       # {'temperature_c': 38.2, 'humidity_pct': 11.5, ...}
+```
+
+**The fire behavior metrics** are the operationally meaningful numbers:
+
+| Field | What it tells you |
+|-------|-------------------|
+| `avg_ros_ft_min` | How fast the fire is moving (ft/min) |
+| `max_fireline_intensity` | Energy output (BTU/ft/s) — determines what can stop it |
+| `avg_flame_length_ft` | How tall the flames are |
+| `danger_rating` | Low / Moderate / High / Very High / Extreme |
+| `estimated_acres_hr` | How fast the fire is growing |
+
+These numbers come from the Rothermel (1972) fire spread model. They're grounded in real-world wildfire science — the intensity ranges correspond to actual suppression categories (hand crews < 100 BTU/ft/s, engines 100-500, aircraft only above 2000).
+
+**Try it:**
+
+```python
+from domains.wildfire.scenarios import create_basic_wildfire
 
 engine = create_basic_wildfire()
-
-for tick in range(30):
+for tick in range(10):
     snapshot = engine.tick()
-    print(f"Tick {snapshot.tick}: {snapshot.grid_summary}")
+    fb = snapshot.domain_summary
+    print(f"Tick {snapshot.tick}: "
+          f"{snapshot.grid_summary.get('BURNING', 0)} burning, "
+          f"intensity={fb.get('max_fireline_intensity', 0):.0f} BTU/ft/s, "
+          f"danger={fb.get('danger_rating', 'N/A')}")
 ```
 
-The grid has a forested north, a dry grassland south, a rock ridge running through the middle (acting as a natural firebreak, with a gap at columns 6–7), a lake in the northwest corner, and an urban area in the southeast. Wind blows from the southwest. Fire is pre-ignited at cell (7, 2) in the dry southern grassland.
-
-You don't need to build this yourself — the scenario function is there precisely so you can skip the setup and start working with a running world. When you need a custom scenario, `create_basic_wildfire()` is a good template to study.
-
-The scenario code lives in `src/domains/wildfire/scenarios.py`. The sensor and resource setup functions there are not covered in this session — we'll get to those in sessions 03 and 11.
+**Your agent will never call this directly.** The world engine is ground truth. The agent only sees what sensors report.
 
 ---
 
-## What you should see
+## Sensors: what the agent actually sees
 
-Running the tick loop against the basic scenario, you'll see grid summary counts shift as fire spreads:
+Sensors sit on the grid and sample the world each tick. They produce `SensorEvent` objects — noisy, incomplete observations of ground truth.
 
+**What a sensor event looks like:**
+
+```python
+{
+    "event_id": "a1b2c3...",          # unique per reading
+    "source_id": "temp-sensor-A1",     # which sensor
+    "source_type": "temperature",      # what kind of reading
+    "cluster_id": "cluster-north",     # routing key — which agent gets this
+    "sim_tick": 5,                     # when
+    "confidence": 1.0,                 # sensor health (1.0 = healthy, 0.3 = stuck)
+    "payload": {"celsius": 52.4},      # the actual reading — domain-specific
+}
 ```
-Tick  0: {'UNBURNED': 99, 'BURNING': 1, 'BURNED': 0}
-Tick  5: {'UNBURNED': 94, 'BURNING': 5, 'BURNED': 1}
-Tick 10: {'UNBURNED': 87, 'BURNING': 8, 'BURNED': 5}
-...
-```
 
-The counts are the raw output of `summary_label()` on each cell — whatever the cell state's label is, it gets counted. For fire states that's UNBURNED, BURNING, and BURNED.
+**Key properties:**
+- **Noisy** — readings include Gaussian noise. Two sensors at the same spot won't report identical values.
+- **Incomplete** — sensors only cover some grid cells. The agent has blind spots.
+- **Sometimes wrong** — sensors can be stuck (frozen reading), in dropout (silent), or drifting (gradual offset). The `confidence` field reflects this.
 
-At this point you're just watching numbers change. Session 02 adds the physics layer that makes those numbers meaningful — rate of spread, flame length, fireline intensity. That's when the simulation starts producing data the agent can actually reason about.
+**Sensor types in the wildfire domain:**
+
+| Type | What it reads | Payload |
+|------|--------------|---------|
+| Temperature | Ambient temp + radiant heat from nearby fire | `{"celsius": 52.4}` |
+| Smoke | PM2.5 based on fire intensity, distance, and wind | `{"pm25_ugm3": 145.2}` |
+| Humidity | Relative humidity from the environment | `{"humidity_pct": 11.5}` |
+| Wind | Speed and direction | `{"speed_mps": 8.1, "direction_deg": 225}` |
+| Barometric | Air pressure | `{"pressure_hpa": 1008.3}` |
+| Thermal Camera | Heat grid over a rectangular region | `{"grid": [[0.0, 0.8, ...], ...]}` |
+
+**The gap between truth and observation is the testbed.** You can measure exactly how much information is lost by comparing sensor readings to the actual grid state. Later, you'll inject sensor failures and see whether the agent still makes good decisions.
 
 ---
 
-## Key files
+## Transport: how events reach the agent
 
-- `src/world/generic_engine.py` — `GenericWorldEngine`, `GenericGroundTruthSnapshot`
-- `src/world/generic_grid.py` — `GenericTerrainGrid`, `GenericCell`
-- `src/world/cell_state.py` — `CellState` abstract base
-- `src/world/physics.py` — `PhysicsModule` abstract base, `StateEvent` dataclass
-- `src/domains/wildfire/cell_state.py` — `FireCellState`, `FireState`, `TerrainType`
-- `src/domains/wildfire/environment.py` — `FireEnvironmentState`
-- `src/domains/wildfire/scenarios.py` — `create_basic_wildfire()`
+The transport layer moves sensor events from sensors to agents:
+
+1. **SensorPublisher** — ticks the world engine each step, calls `emit()` on every sensor, and puts events onto a queue
+2. **SensorEventQueue** — an async queue that decouples the producer (sensors) from the consumer (agents)
+3. **EventBridgeConsumer** — reads events off the queue, batches them by `cluster_id`, and invokes the agent graph
+
+**What the agent receives** (constructed by the bridge consumer):
+
+```python
+state = {
+    "cluster_id": "cluster-north",
+    "sensor_events": [event1, event2, event3],   # batch of events for this cluster
+    "trigger_event": event3,                      # most recent event
+    "messages": [],                               # LangGraph message list
+    "anomalies": [],                              # findings accumulate here
+    "status": "idle",
+}
+```
+
+**Why batching matters:** The consumer doesn't invoke the agent for every single event. It collects a batch (default 3-5 events), then invokes once. This lets the agent correlate across readings — temperature spiked *and* smoke increased *and* wind shifted — all in one invocation. Better context, fewer LLM calls.
+
+**Why per-cluster routing matters:** Each `cluster_id` gets its own agent instance. Events from `cluster-north` go to one agent, events from `cluster-south` go to another. Later (Session 3), a supervisor agent will aggregate findings across all clusters.
 
 ---
 
-*Next: Session 02 plugs in the Rothermel fire physics model, so each tick produces not just a count of burning cells but a physically grounded picture of how fast the fire is moving, how intense it is, and what kind of resources could actually stop it.*
+## Resources: what the agent can query
+
+Resources are preparedness assets — firetrucks, crews, hospitals, helicopters. Unlike sensors, resources don't produce events. They're queryable state that helps the agent answer: "Are we prepared for this situation?"
+
+**What a resource looks like:**
+
+```python
+{
+    "resource_id": "engine-south-1",
+    "resource_type": "engine",
+    "cluster_id": "cluster-south",
+    "status": "AVAILABLE",           # AVAILABLE / DEPLOYED / OUT_OF_SERVICE
+    "capacity": 500.0,               # max capability (gallons of water)
+    "available": 500.0,              # current remaining capability
+    "mobile": True,                  # can it move?
+    "metadata": {"nwcg_id": "E-3", "unit": "gallons"},
+}
+```
+
+**The pre-built scenario includes 8 resources:**
+
+| Resource | Type | What it does | Capacity |
+|----------|------|-------------|----------|
+| Hotshot Crew | crew | Fireline construction | 15 chains/hr |
+| Hand Crew | crew | Fireline construction | 8 chains/hr |
+| 2x Wildland Engines | engine | Water suppression | 500 gal each |
+| Heavy Dozer | dozer | Firebreak construction | 60 chains/hr |
+| Ambulance | ambulance | Medical transport | 2 patients |
+| Hospital | hospital | Medical care | 50 beds |
+| Heavy Helicopter | helicopter | Aerial suppression | 700 gal |
+
+**Readiness summary** — this is what the agent queries:
+
+```python
+summary = resource_inventory.readiness_summary()
+# Returns: total by type, how many available, capacity remaining, coverage by cluster
+```
+
+**Scenario knobs** let you degrade resources for testing:
+- `reduce_resources("engine", keep_fraction=0.5)` — remove half the engines
+- `disable_resources("helicopter", fraction=1.0)` — take all helicopters out of service
+- `reset_all()` — restore everything
+
+---
+
+## The complete picture
+
+Here's what your agent will work with when you start building it in Session 2:
+
+**Inputs (what the agent sees):**
+- Batches of sensor events — noisy temperature, smoke, humidity, wind readings
+- Resource inventory queries — what's available, where, how much capacity
+
+**Outputs (what the agent produces):**
+- Anomaly findings — "temperature spike detected in cluster-south, severity High"
+- Preparedness assessments — "insufficient engine coverage for current fire intensity"
+- Recommended actions — "deploy engine-south-1 to grid position (5,3)"
+
+**What the agent does NOT see:**
+- The actual grid state (which cells are burning)
+- The exact fire intensity or rate of spread
+- Which sensors are malfunctioning (it only sees the `confidence` field)
+
+That gap is intentional. It's the same incomplete picture a real incident commander has. Your job in the next sessions is to build an agent that makes good decisions despite that gap.
+
+---
+
+## Key files reference
+
+**World Engine:**
+- `src/world/generic_engine.py` — tick loop, snapshots
+- `src/domains/wildfire/rothermel_physics.py` — fire spread model
+- `src/domains/wildfire/scenarios.py` — pre-built scenarios
+
+**Sensors:**
+- `src/sensors/base.py` — `SensorBase`, failure modes
+- `src/domains/wildfire/sensors.py` — temperature, smoke, humidity, wind, thermal camera
+- `src/transport/schemas.py` — `SensorEvent` envelope
+
+**Transport:**
+- `src/sensors/publisher.py` — async tick loop, drives all sensors
+- `src/transport/queue.py` — async event queue
+- `src/bridge/consumer.py` — batching, routing, agent invocation
+
+**Resources:**
+- `src/resources/base.py` — `ResourceBase`, status transitions, capacity
+- `src/resources/inventory.py` — registration, queries, readiness summaries
+- `src/domains/wildfire/nwcg_resources.py` — NWCG-aligned resource definitions
+
+---
+
+## Checkpoint: what should pass
+
+Run the infrastructure tests:
+
+```bash
+pytest tests/world/ tests/domains/ tests/sensors/ tests/transport/ -v
+```
+
+All tests should pass. If you want a quick count:
+
+```bash
+pytest tests/world/ tests/domains/ tests/sensors/ tests/transport/ -q
+```
+
+You should see something like `285 passed` (the exact number may vary as tests are added).
+
+**Tests that will NOT pass yet** (and shouldn't):
+- `tests/bridge/` — depends on agent code (Session 2)
+- `tests/resources/` — some tests depend on tool code (Session 7)
+- `tests/agents/` — you'll build this starting in Session 2
+- `tests/tools/` — you'll build this in Sessions 3 and 7
+
+---
+
+*Next: Session 2 — you build your first agent. A LangGraph StateGraph that receives sensor event batches and classifies them into anomaly findings. First as stub logic (no LLM), then with an LLM and tools.*

@@ -11,7 +11,6 @@ from domains.wildfire.environment import FireEnvironmentState
 from domains.wildfire import FirePhysicsModule
 from world import GenericWorldEngine
 from world.generic_grid import GenericTerrainGrid
-from transport import SensorEvent
 
 
 @pytest.fixture(autouse=True)
@@ -48,15 +47,3 @@ def fire_environment() -> FireEnvironmentState:
 def engine(small_grid, fire_environment, fire_physics) -> GenericWorldEngine:
     """A GenericWorldEngine with a 5x5 grid, hot/dry weather, and fire physics."""
     return GenericWorldEngine(grid=small_grid, environment=fire_environment, physics=fire_physics)
-
-
-@pytest.fixture
-def sample_event() -> SensorEvent:
-    """A pre-built SensorEvent for transport/agent tests."""
-    return SensorEvent.create(
-        source_id="temp-A1",
-        source_type="temperature",
-        cluster_id="cluster-north",
-        payload={"celsius": 42.1},
-        confidence=0.95,
-    )

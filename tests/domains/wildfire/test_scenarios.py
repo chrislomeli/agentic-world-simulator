@@ -4,7 +4,7 @@ import random
 import pytest
 
 from domains.wildfire import FireState, TerrainType
-from domains.wildfire import (
+from domains.wildfire.scenarios import (
     create_basic_wildfire,
     create_full_wildfire_scenario,
     create_wildfire_resources,
