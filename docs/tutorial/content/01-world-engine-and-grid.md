@@ -17,7 +17,27 @@ By the end of this session you will have:
 
 ## Get the code
 
-Copy everything from the tutorial repo:
+**If you're starting from a fresh clone**, run these setup steps first. If you already have a working `.venv` and the `tutorial` remote configured, skip ahead to "Copy everything."
+
+```bash
+# Create and activate virtual environment
+uv venv
+source .venv/bin/activate   # macOS/Linux
+
+# Install dependencies
+uv pip install -e ".[llm]" --group dev
+
+# Add the tutorial repo as a remote (if not already added)
+git remote add tutorial https://github.com/chrislomeli/agentic-world-simulator.git
+```
+
+**Fetch the latest from the tutorial repo:**
+
+```bash
+git fetch tutorial
+```
+
+**Copy everything:**
 
 ```bash
 git checkout tutorial/main -- src/world/

@@ -52,3 +52,4 @@ packages = ["src/sensors", "src/tools", "src/domains", "src/transport", "src/bri
 testpaths = ["tests"]
 python_files = ["test_*.py"]
 asyncio_mode = "auto"
+pythonpath = ["src"]
