@@ -42,8 +42,6 @@ This is the key LangGraph skill this graph demonstrates:
   "dynamic fan-out where the number of targets is known only at runtime"
 """
 
-from __future__ import annotations
-
 import json
 import logging
 from datetime import UTC

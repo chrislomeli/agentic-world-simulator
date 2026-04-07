@@ -33,8 +33,6 @@ you can invoke the cluster agent directly with a SensorEvent
 without needing the supervisor running.
 """
 
-from __future__ import annotations
-
 import json
 import logging
 from typing import Literal
