@@ -43,7 +43,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 
 from sensors.base import SensorBase
 from transport.queue import SensorEventQueue
@@ -71,11 +71,11 @@ class SensorPublisher:
     def __init__(
         self,
         *,
-        sensors: Optional[List[SensorBase]] = None,
-        inventory: Optional["SensorInventory"] = None,
+        sensors: list[SensorBase] | None = None,
+        inventory: SensorInventory | None = None,
         queue: SensorEventQueue,
         tick_interval_seconds: float = 1.0,
-        engine: Optional["GenericWorldEngine"] = None,
+        engine: GenericWorldEngine | None = None,
     ) -> None:
         """
         Parameters
@@ -122,7 +122,7 @@ class SensorPublisher:
         logger.info("SensorPublisher stop requested")
         self._stop_requested = True
 
-    async def run(self, ticks: Optional[int] = None) -> None:
+    async def run(self, ticks: int | None = None) -> None:
         """
         Run the publisher loop.
 

@@ -8,8 +8,16 @@ Pipeline: ingest_events → classify → route → report_findings.
 
   - state.py  — ClusterAgentState TypedDict + AnomalyFinding model.
   - graph.py  — The compiled LangGraph StateGraph.
-
-The classify node is currently a STUB — it produces placeholder
-AnomalyFinding entries.  Next step: wire in ToolNode + LLM calls
-for real anomaly detection.
 """
+
+from agents.cluster.graph import build_cluster_agent_graph as build_cluster_agent_graph
+from agents.cluster.state import AnomalyFinding as AnomalyFinding
+from agents.cluster.state import ClusterAgentState as ClusterAgentState
+from agents.cluster.state import append_events as append_events
+
+__all__ = [
+    "AnomalyFinding",
+    "ClusterAgentState",
+    "append_events",
+    "build_cluster_agent_graph",
+]

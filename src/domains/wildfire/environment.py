@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Any, Dict
+from typing import Any
 
 from world.environment import EnvironmentState
 
@@ -109,7 +109,7 @@ class FireEnvironmentState(EnvironmentState):
         col_delta = math.sin(rad)    # east component
         return (row_delta, col_delta)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialise current weather for logging / ground truth snapshots."""
         return {
             "temperature_c": round(self.temperature_c, 1),

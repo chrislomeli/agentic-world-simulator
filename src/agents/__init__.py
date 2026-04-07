@@ -3,16 +3,29 @@ ogar.agents
 
 LangGraph agent graphs.
 
-This package contains the agent graphs that process sensor data,
-detect anomalies, and decide on actions.  The architecture is
-hierarchical:
-
-  - cluster/   — ClusterAgent: processes sensor events for one
-                 geographic cluster, detects anomalies.
+  - cluster/    — ClusterAgent: processes sensor events for one
+                  geographic cluster, detects anomalies.
   - supervisor/ — SupervisorAgent: fans out to cluster agents
                   via LangGraph's Send API, aggregates findings,
                   decides actions, gates through HITL approval.
-
-Each agent is a compiled LangGraph StateGraph.  The supervisor
-invokes cluster agents as subgraphs.
 """
+
+from agents.cluster import AnomalyFinding as AnomalyFinding
+from agents.cluster import ClusterAgentState as ClusterAgentState
+from agents.cluster import append_events as append_events
+from agents.cluster import build_cluster_agent_graph as build_cluster_agent_graph
+from agents.supervisor import SupervisorState as SupervisorState
+from agents.supervisor import aggregate_findings_reducer as aggregate_findings_reducer
+from agents.supervisor import build_supervisor_graph as build_supervisor_graph
+
+__all__ = [
+    # Cluster agent
+    "AnomalyFinding",
+    "ClusterAgentState",
+    "append_events",
+    "build_cluster_agent_graph",
+    # Supervisor agent
+    "SupervisorState",
+    "aggregate_findings_reducer",
+    "build_supervisor_graph",
+]

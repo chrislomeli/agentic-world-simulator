@@ -7,10 +7,10 @@ TerrainType and FireState are defined here so all parts of the codebase
 (domain package, old tests, sensors) share the same enum objects.
 """
 
-from enum import Enum
+from enum import StrEnum
 
 
-class TerrainType(str, Enum):
+class TerrainType(StrEnum):
     """
     What kind of land a cell represents.
 
@@ -24,7 +24,7 @@ class TerrainType(str, Enum):
     URBAN     = "URBAN"
 
 
-class FireState(str, Enum):
+class FireState(StrEnum):
     """
     The fire state of a single cell.
 

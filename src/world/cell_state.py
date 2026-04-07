@@ -26,10 +26,9 @@ Pydantic v2 generic model pitfalls and keeps the hot path fast.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Generic, Optional, TypeVar
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel
-
 
 # ── CellState ABC ────────────────────────────────────────────────────────────
 
@@ -94,7 +93,7 @@ class GenericCell(Generic[C]):
         col: int,
         cell_state: C,
         layer: int = 0,
-        attributes: Optional[Dict[str, Any]] = None,
+        attributes: dict[str, Any] | None = None,
     ) -> None:
         self.row = row
         self.col = col
@@ -102,7 +101,7 @@ class GenericCell(Generic[C]):
         self.cell_state = cell_state
         self.attributes = attributes or {}
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialise for snapshots and logging."""
         return {
             "row": self.row,

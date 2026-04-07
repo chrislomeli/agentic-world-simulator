@@ -36,7 +36,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Dict, Generic, List, TypeVar
+from typing import TYPE_CHECKING, Any, Generic, TypeVar
 
 from world.cell_state import CellState
 
@@ -120,7 +120,7 @@ class PhysicsModule(ABC, Generic[C]):
         grid: GenericTerrainGrid[C],
         environment: EnvironmentState,
         tick: int,
-    ) -> List[StateEvent[C]]:
+    ) -> list[StateEvent[C]]:
         """
         Compute state changes for one simulation tick.
 
@@ -141,7 +141,7 @@ class PhysicsModule(ABC, Generic[C]):
         ...
 
     @abstractmethod
-    def summarize(self, grid: GenericTerrainGrid[C]) -> Dict[str, Any]:
+    def summarize(self, grid: GenericTerrainGrid[C]) -> dict[str, Any]:
         """
         Return a domain-specific summary of the current grid state.
 

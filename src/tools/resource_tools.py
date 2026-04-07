@@ -26,13 +26,12 @@ Design notes
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from langchain_core.tools import tool
 
 from resources.base import ResourceStatus
 from resources.inventory import ResourceInventory
-
 
 # ── State access ─────────────────────────────────────────────────────────────
 # Resource tools read from the shared supervisor tool state.  The supervisor
@@ -43,7 +42,7 @@ from resources.inventory import ResourceInventory
 # For standalone testing, set_resource_tool_state() and
 # clear_resource_tool_state() are provided as convenience wrappers.
 
-def _get_inventory() -> Optional[ResourceInventory]:
+def _get_inventory() -> ResourceInventory | None:
     """Read the ResourceInventory from the supervisor tool state."""
     # Import here to avoid circular imports at module load time.
     # supervisor_tools imports from resources.inventory,
@@ -68,7 +67,7 @@ def clear_resource_tool_state() -> None:
 # ── Tools ────────────────────────────────────────────────────────────────────
 
 @tool
-def get_resource_summary() -> Dict[str, Any]:
+def get_resource_summary() -> dict[str, Any]:
     """Get an overall readiness summary of all resources.
 
     Returns:
@@ -85,7 +84,7 @@ def get_resource_summary() -> Dict[str, Any]:
 
 
 @tool
-def get_resources_by_cluster(cluster_id: str) -> List[Dict[str, Any]]:
+def get_resources_by_cluster(cluster_id: str) -> list[dict[str, Any]]:
     """Get all resources assigned to a specific cluster.
 
     Args:
@@ -103,7 +102,7 @@ def get_resources_by_cluster(cluster_id: str) -> List[Dict[str, Any]]:
 
 
 @tool
-def get_resources_by_type(resource_type: str) -> List[Dict[str, Any]]:
+def get_resources_by_type(resource_type: str) -> list[dict[str, Any]]:
     """Get all resources of a specific type across all clusters.
 
     Args:
@@ -120,7 +119,7 @@ def get_resources_by_type(resource_type: str) -> List[Dict[str, Any]]:
 
 
 @tool
-def check_preparedness(cluster_id: Optional[str] = None) -> Dict[str, Any]:
+def check_preparedness(cluster_id: str | None = None) -> dict[str, Any]:
     """Check whether a cluster (or the whole system) is adequately resourced.
 
     Examines resource availability and capacity to provide a preparedness
@@ -171,7 +170,7 @@ def check_preparedness(cluster_id: Optional[str] = None) -> Dict[str, Any]:
     util_pct = round((1.0 - avail_cap / total_cap) * 100, 1) if total_cap > 0 else 0.0
 
     # Identify gaps — simple heuristic checks.
-    gaps: List[str] = []
+    gaps: list[str] = []
     if not available:
         gaps.append("No resources currently available (all deployed or out of service)")
     if avail_cap < total_cap * 0.2:
@@ -183,8 +182,8 @@ def check_preparedness(cluster_id: Optional[str] = None) -> Dict[str, Any]:
     # ── Fire behavior-aware gap checks ───────────────────────────
     # When fire behavior data is available, cross-reference intensity
     # thresholds against the types present in this cluster/scope.
-    from tools.supervisor_tools import _state as supervisor_state
     from domains.wildfire.nwcg_resources import INTENSITY_THRESHOLDS
+    from tools.supervisor_tools import _state as supervisor_state
     fire_behavior = supervisor_state.fire_behavior_summary
     if fire_behavior:
         intensity = fire_behavior.get("max_fireline_intensity", 0.0)

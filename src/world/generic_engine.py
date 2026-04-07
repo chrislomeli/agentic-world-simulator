@@ -42,7 +42,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import Any, Dict, Generic, List, Optional, TypeVar
+from typing import Any, Generic, TypeVar
 
 from world.cell_state import CellState
 from world.environment import EnvironmentState
@@ -75,11 +75,11 @@ class GenericGroundTruthSnapshot:
                       Empty dict when no ResourceInventory is used.
     """
     tick: int
-    environment: Dict[str, Any]
-    state_events: List[Dict[str, Any]]
-    domain_summary: Dict[str, Any]
-    grid_summary: Dict[str, int]
-    resource_summary: Dict[str, Any] = field(default_factory=dict)
+    environment: dict[str, Any]
+    state_events: list[dict[str, Any]]
+    domain_summary: dict[str, Any]
+    grid_summary: dict[str, int]
+    resource_summary: dict[str, Any] = field(default_factory=dict)
 
 
 # ── Generic world engine ─────────────────────────────────────────────────────
@@ -134,7 +134,7 @@ class GenericWorldEngine(Generic[C]):
         self._tick: int = 0
 
         # History of ground truth snapshots, one per tick.
-        self.history: List[GenericGroundTruthSnapshot] = []
+        self.history: list[GenericGroundTruthSnapshot] = []
 
     @property
     def current_tick(self) -> int:
@@ -158,7 +158,7 @@ class GenericWorldEngine(Generic[C]):
         self.environment.tick()
 
         # ── 2. Compute state changes ─────────────────────────────
-        state_events: List[StateEvent[C]] = self._physics.tick_physics(
+        state_events: list[StateEvent[C]] = self._physics.tick_physics(
             grid=self.grid,
             environment=self.environment,
             tick=self._tick,
@@ -202,7 +202,7 @@ class GenericWorldEngine(Generic[C]):
 
         return snapshot
 
-    def run(self, ticks: int) -> List[GenericGroundTruthSnapshot]:
+    def run(self, ticks: int) -> list[GenericGroundTruthSnapshot]:
         """
         Run the simulation for a fixed number of ticks.
 
@@ -211,7 +211,7 @@ class GenericWorldEngine(Generic[C]):
         """
         return [self.tick() for _ in range(ticks)]
 
-    def get_snapshot(self, tick: int) -> Optional[GenericGroundTruthSnapshot]:
+    def get_snapshot(self, tick: int) -> GenericGroundTruthSnapshot | None:
         """
         Retrieve the ground truth snapshot for a specific tick.
 

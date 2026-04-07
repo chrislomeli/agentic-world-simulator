@@ -20,7 +20,6 @@ Values calibrated to the reference widget in docs/tutorial/wildfires/wirldfire-l
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict
 
 from world.grid import TerrainType
 
@@ -47,7 +46,7 @@ class FuelModel:
 #
 # ROCK and WATER are intentionally absent — they are non-burnable.
 
-FUEL_MODELS: Dict[TerrainType, FuelModel] = {
+FUEL_MODELS: dict[TerrainType, FuelModel] = {
     TerrainType.GRASSLAND: FuelModel(
         base_spread_rate_ft_min=18.0,
         heat_content_btu_lb=8000.0,

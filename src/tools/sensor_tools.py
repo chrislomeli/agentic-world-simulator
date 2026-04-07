@@ -25,12 +25,11 @@ Design notes
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from langchain_core.tools import tool
 
 from transport.schemas import SensorEvent
-
 
 # ── State store ──────────────────────────────────────────────────────────────
 # Tools need access to the current sensor events.  We use a simple module-level
@@ -39,14 +38,14 @@ from transport.schemas import SensorEvent
 
 class _SensorToolState:
     """Mutable holder for the current cluster's sensor events."""
-    events: List[SensorEvent] = []
+    events: list[SensorEvent] = []
     cluster_id: str = ""
 
 
 _state = _SensorToolState()
 
 
-def set_tool_state(events: List[SensorEvent], cluster_id: str) -> None:
+def set_tool_state(events: list[SensorEvent], cluster_id: str) -> None:
     """Called by the graph before the LLM/tool loop to load context."""
     _state.events = list(events)
     _state.cluster_id = cluster_id
@@ -62,9 +61,9 @@ def clear_tool_state() -> None:
 
 @tool
 def get_recent_readings(
-    source_type: Optional[str] = None,
+    source_type: str | None = None,
     limit: int = 10,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """Return the most recent sensor readings from this cluster.
 
     Args:
@@ -93,7 +92,7 @@ def get_recent_readings(
 
 
 @tool
-def get_sensor_summary() -> Dict[str, Any]:
+def get_sensor_summary() -> dict[str, Any]:
     """Compute aggregate statistics per sensor type in the current window.
 
     Returns:
@@ -105,7 +104,7 @@ def get_sensor_summary() -> Dict[str, Any]:
           - latest_payload: the most recent reading's payload
     """
     events = _state.events
-    by_type: Dict[str, List[SensorEvent]] = {}
+    by_type: dict[str, list[SensorEvent]] = {}
     for e in events:
         by_type.setdefault(e.source_type, []).append(e)
 
@@ -128,7 +127,7 @@ def check_threshold(
     payload_key: str,
     threshold: float,
     direction: str = "above",
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """Check if any sensor reading exceeds (or falls below) a threshold.
 
     Args:
@@ -169,7 +168,7 @@ def check_threshold(
 
 
 @tool
-def get_cluster_status() -> Dict[str, Any]:
+def get_cluster_status() -> dict[str, Any]:
     """Return metadata about the current cluster and its event window.
 
     Returns:

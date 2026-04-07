@@ -49,8 +49,8 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from enum import Enum
-from typing import Any, Dict, Optional, Tuple, Union
+from enum import StrEnum
+from typing import Any
 
 from transport.schemas import SensorEvent
 
@@ -59,7 +59,7 @@ logger = logging.getLogger(__name__)
 
 # ── Failure mode enum ─────────────────────────────────────────────────────────
 
-class FailureMode(str, Enum):
+class FailureMode(StrEnum):
     """
     The set of failure modes a sensor can be put into.
 
@@ -103,10 +103,10 @@ class SensorBase(ABC):
         *,
         source_id: str,
         cluster_id: str,
-        grid_row: Optional[int] = None,
-        grid_col: Optional[int] = None,
-        grid_layer: Optional[int] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        grid_row: int | None = None,
+        grid_col: int | None = None,
+        grid_layer: int | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """
         Parameters
@@ -139,12 +139,12 @@ class SensorBase(ABC):
         self._failure_mode: FailureMode = FailureMode.NORMAL
 
         # Stuck-mode cache: the last real reading, held frozen when stuck.
-        self._stuck_payload: Optional[Dict[str, Any]] = None
+        self._stuck_payload: dict[str, Any] | None = None
 
     # ── Location ──────────────────────────────────────────────────────────────
 
     @property
-    def location(self) -> Union[Tuple[int, int, int], Tuple[int, int], None]:
+    def location(self) -> tuple[int, int, int] | tuple[int, int] | None:
         """Return sensor position as a tuple, or None if no position is set.
 
         Returns (row, col, layer) when all three are set,
@@ -176,7 +176,7 @@ class SensorBase(ABC):
         ...
 
     @abstractmethod
-    def read(self) -> Dict[str, Any]:
+    def read(self) -> dict[str, Any]:
         """
         Produce a fresh domain-specific reading.
 
@@ -235,7 +235,7 @@ class SensorBase(ABC):
 
     # ── Core emit ─────────────────────────────────────────────────────────────
 
-    def emit(self) -> Optional[SensorEvent]:
+    def emit(self) -> SensorEvent | None:
         """
         Produce a SensorEvent envelope wrapping the current reading.
 

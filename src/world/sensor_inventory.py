@@ -32,7 +32,6 @@ from __future__ import annotations
 
 import logging
 import random
-from typing import Dict, List, Optional, Set, Tuple
 
 from sensors.base import FailureMode, SensorBase
 from transport.schemas import SensorEvent
@@ -66,9 +65,9 @@ class SensorInventory:
         self._grid_rows = grid_rows
         self._grid_cols = grid_cols
         self._grid_layers = grid_layers
-        self._sensors: Dict[str, SensorBase] = {}                    # source_id → sensor
-        self._positions: Dict[str, Tuple[int, int, int]] = {}        # source_id → (row, col, layer)
-        self._type_index: Dict[str, Set[str]] = {}                   # source_type → {source_ids}
+        self._sensors: dict[str, SensorBase] = {}                    # source_id → sensor
+        self._positions: dict[str, tuple[int, int, int]] = {}        # source_id → (row, col, layer)
+        self._type_index: dict[str, set[str]] = {}                   # source_type → {source_ids}
 
     # ── Registration ─────────────────────────────────────────────────────────
 
@@ -121,11 +120,11 @@ class SensorInventory:
         """Get a sensor by its source_id. Raises KeyError if not found."""
         return self._sensors[source_id]
 
-    def get_position(self, source_id: str) -> Tuple[int, int, int]:
+    def get_position(self, source_id: str) -> tuple[int, int, int]:
         """Get the (row, col, layer) position of a sensor. Raises KeyError if not found."""
         return self._positions[source_id]
 
-    def get_sensors_at(self, row: int, col: int, layer: int = 0) -> List[SensorBase]:
+    def get_sensors_at(self, row: int, col: int, layer: int = 0) -> list[SensorBase]:
         """Return all sensors placed at the given grid position."""
         return [
             sensor
@@ -133,7 +132,7 @@ class SensorInventory:
             if self._positions[sid] == (row, col, layer)
         ]
 
-    def all_sensors(self) -> List[SensorBase]:
+    def all_sensors(self) -> list[SensorBase]:
         """Return all registered sensors."""
         return list(self._sensors.values())
 
@@ -161,11 +160,11 @@ class SensorInventory:
 
     # ── Layer queries ───────────────────────────────────────────────────────
 
-    def layer_types(self) -> Set[str]:
+    def layer_types(self) -> set[str]:
         """Return the set of distinct source_type values currently registered."""
         return set(self._type_index.keys())
 
-    def get_layer(self, source_type: str) -> Dict[str, Tuple[int, int, int]]:
+    def get_layer(self, source_type: str) -> dict[str, tuple[int, int, int]]:
         """
         Return all sensors of a given type as {source_id: (row, col, layer)}.
 
@@ -174,12 +173,12 @@ class SensorInventory:
         sids = self._type_index.get(source_type, set())
         return {sid: self._positions[sid] for sid in sids}
 
-    def layer_positions(self, source_type: str) -> Set[Tuple[int, int, int]]:
+    def layer_positions(self, source_type: str) -> set[tuple[int, int, int]]:
         """Return the set of (row, col, layer) positions occupied by a sensor type."""
         sids = self._type_index.get(source_type, set())
         return {self._positions[sid] for sid in sids}
 
-    def all_layer_positions(self) -> Dict[str, Set[Tuple[int, int, int]]]:
+    def all_layer_positions(self) -> dict[str, set[tuple[int, int, int]]]:
         """Return {source_type: {(row, col, layer), ...}} for every registered type."""
         return {
             stype: self.layer_positions(stype)
@@ -199,7 +198,7 @@ class SensorInventory:
 
     # ── Layer experimental knobs ────────────────────────────────────────────
 
-    def thin_layer(self, source_type: str, keep_fraction: float) -> List[str]:
+    def thin_layer(self, source_type: str, keep_fraction: float) -> list[str]:
         """
         Randomly remove sensors of a specific type.
 
@@ -229,7 +228,7 @@ class SensorInventory:
         source_type: str,
         mode: FailureMode,
         fraction: float = 1.0,
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Apply a failure mode to a fraction of sensors in a specific layer.
 
@@ -253,7 +252,7 @@ class SensorInventory:
 
     # ── Coverage analysis ────────────────────────────────────────────────────
 
-    def covered_cells(self) -> Set[Tuple[int, int, int]]:
+    def covered_cells(self) -> set[tuple[int, int, int]]:
         """Return the set of grid cells that have at least one sensor."""
         return set(self._positions.values())
 
@@ -271,7 +270,7 @@ class SensorInventory:
 
     # ── Experimental knobs ───────────────────────────────────────────────────
 
-    def thin(self, keep_fraction: float) -> List[str]:
+    def thin(self, keep_fraction: float) -> list[str]:
         """
         Randomly remove sensors to simulate sparse deployment.
 
@@ -314,7 +313,7 @@ class SensorInventory:
         self,
         mode: FailureMode,
         fraction: float,
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Randomly apply a failure mode to a fraction of sensors.
 
@@ -348,7 +347,7 @@ class SensorInventory:
 
     # ── Emission ─────────────────────────────────────────────────────────────
 
-    def emit_all(self) -> List[SensorEvent]:
+    def emit_all(self) -> list[SensorEvent]:
         """
         Call emit() on every sensor and collect the results.
 

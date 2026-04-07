@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Literal, Optional
+from typing import Literal
 from uuid import uuid4
 
 from langchain_core.language_models import BaseChatModel
@@ -269,7 +269,7 @@ def _parse_llm_findings(state: ClusterAgentState) -> dict:
     }
 
 
-def report_findings(state: ClusterAgentState, store: Optional[BaseStore] = None) -> dict:
+def report_findings(state: ClusterAgentState, store: BaseStore | None = None) -> dict:
     """
     Final node — packages anomalies for the supervisor and writes them to
     the cross-agent Store so the supervisor can recall past incidents.
@@ -357,8 +357,8 @@ def route_after_classify_llm(
 # ── Graph builder ─────────────────────────────────────────────────────────────
 
 def build_cluster_agent_graph(
-    llm: Optional[BaseChatModel] = None,
-    store: Optional[BaseStore] = None,
+    llm: BaseChatModel | None = None,
+    store: BaseStore | None = None,
 ):
     """
     Compile and return the cluster agent subgraph.

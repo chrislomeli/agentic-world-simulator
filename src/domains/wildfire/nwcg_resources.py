@@ -16,9 +16,7 @@ Fireline intensity thresholds source:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional
-
+from dataclasses import dataclass
 
 # ── Resource specification ────────────────────────────────────────────────────
 
@@ -44,16 +42,16 @@ class NWCGResourceSpec:
     nwcg_type: int | str          # int for operational resources, str for cache items
     name: str
     category: str
-    production_rate_chains_hr: Optional[float] = None
-    tank_gal: Optional[float] = None
-    pump_gpm: Optional[float] = None
-    capacity_gal: Optional[float] = None
+    production_rate_chains_hr: float | None = None
+    tank_gal: float | None = None
+    pump_gpm: float | None = None
+    capacity_gal: float | None = None
 
 
 # ── NWCG catalog ──────────────────────────────────────────────────────────────
 # Source: docs/tutorial/wildfires/resources.py
 
-NWCG_CATALOG: List[NWCGResourceSpec] = [
+NWCG_CATALOG: list[NWCGResourceSpec] = [
     # ── Personnel ─────────────────────────────────────────────────────────────
     NWCGResourceSpec(
         nwcg_id="C-1",
@@ -243,7 +241,7 @@ NWCG_CATALOG: List[NWCGResourceSpec] = [
 #   < 2000 BTU/ft/s   → aerial retardant effective
 #   ≥  2000 BTU/ft/s  → indirect attack only; direct suppression marginal
 
-INTENSITY_THRESHOLDS: Dict[str, float] = {
+INTENSITY_THRESHOLDS: dict[str, float] = {
     "hand_crew": 100.0,   # BTU/ft/s — hand crews effective below this
     "engine":    500.0,   # BTU/ft/s — engines effective below this
     "dozer":    1000.0,   # BTU/ft/s — dozers effective below this
@@ -253,7 +251,7 @@ INTENSITY_THRESHOLDS: Dict[str, float] = {
 
 # ── Catalog helpers ───────────────────────────────────────────────────────────
 
-def get_by_id(nwcg_id: str) -> Optional[NWCGResourceSpec]:
+def get_by_id(nwcg_id: str) -> NWCGResourceSpec | None:
     """Look up a resource spec by NWCG ID (e.g. "C-1")."""
     for spec in NWCG_CATALOG:
         if spec.nwcg_id == nwcg_id:
@@ -261,7 +259,7 @@ def get_by_id(nwcg_id: str) -> Optional[NWCGResourceSpec]:
     return None
 
 
-def get_by_kind(kind: str) -> List[NWCGResourceSpec]:
+def get_by_kind(kind: str) -> list[NWCGResourceSpec]:
     """Return all specs for a given kind (e.g. "Crew", "Engine", "Dozer")."""
     return [s for s in NWCG_CATALOG if s.kind == kind]
 

@@ -8,12 +8,14 @@ aggregates findings and decides on actions.
 
   - state.py  — SupervisorState TypedDict with aggregate reducer.
   - graph.py  — The StateGraph with Send-based fan-out pattern.
-
-Pipeline:
-  fan_out_to_clusters → run_cluster_agent (per cluster)
-  → assess_situation → decide_actions → hitl_pause
-  → dispatch_commands
-
-The hitl_pause node uses a HumanApprovalGate (injected via
-functools.partial) to gate destructive actions.
 """
+
+from agents.supervisor.graph import build_supervisor_graph as build_supervisor_graph
+from agents.supervisor.state import SupervisorState as SupervisorState
+from agents.supervisor.state import aggregate_findings_reducer as aggregate_findings_reducer
+
+__all__ = [
+    "SupervisorState",
+    "aggregate_findings_reducer",
+    "build_supervisor_graph",
+]

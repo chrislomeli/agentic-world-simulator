@@ -32,8 +32,8 @@ from __future__ import annotations
 
 import logging
 from abc import ABC, abstractmethod
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional
+from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel
@@ -66,8 +66,8 @@ class ActuatorCommand(BaseModel):
     cluster_id: str
     timestamp: datetime
     priority: int = 3          # Default medium priority
-    payload: Dict[str, Any] = {}
-    metadata: Dict[str, Any] = {}
+    payload: dict[str, Any] = {}
+    metadata: dict[str, Any] = {}
 
     @classmethod
     def create(
@@ -76,10 +76,10 @@ class ActuatorCommand(BaseModel):
         command_type: str,
         source_agent: str,
         cluster_id: str,
-        payload: Dict[str, Any],
+        payload: dict[str, Any],
         priority: int = 3,
-        metadata: Dict[str, Any] | None = None,
-    ) -> "ActuatorCommand":
+        metadata: dict[str, Any] | None = None,
+    ) -> ActuatorCommand:
         """
         Factory method — auto-generates command_id and timestamp.
         Use this instead of the constructor directly.
@@ -89,7 +89,7 @@ class ActuatorCommand(BaseModel):
             command_type=command_type,
             source_agent=source_agent,
             cluster_id=cluster_id,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             priority=priority,
             payload=payload,
             metadata=metadata or {},
@@ -113,21 +113,21 @@ class ActuatorResult(BaseModel):
     command_id: str
     success: bool
     timestamp: datetime
-    payload: Dict[str, Any] = {}
-    error: Optional[str] = None
+    payload: dict[str, Any] = {}
+    error: str | None = None
 
     @classmethod
     def success_result(
         cls,
         command_id: str,
-        payload: Dict[str, Any] | None = None,
-    ) -> "ActuatorResult":
+        payload: dict[str, Any] | None = None,
+    ) -> ActuatorResult:
         """Factory for a successful result."""
         return cls(
             result_id=str(uuid4()),
             command_id=command_id,
             success=True,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             payload=payload or {},
         )
 
@@ -136,13 +136,13 @@ class ActuatorResult(BaseModel):
         cls,
         command_id: str,
         error: str,
-    ) -> "ActuatorResult":
+    ) -> ActuatorResult:
         """Factory for a failed result."""
         return cls(
             result_id=str(uuid4()),
             command_id=command_id,
             success=False,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             error=error,
         )
 

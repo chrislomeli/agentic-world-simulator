@@ -30,13 +30,12 @@ Design notes
 from __future__ import annotations
 
 from collections import Counter
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from langchain_core.tools import tool
 
 from agents.cluster.state import AnomalyFinding
 from resources.inventory import ResourceInventory
-
 
 # ── State store ──────────────────────────────────────────────────────────────
 # Same pattern as sensor_tools.py — a module-level mutable holder that the
@@ -44,20 +43,20 @@ from resources.inventory import ResourceInventory
 
 class _SupervisorToolState:
     """Mutable holder for the current supervisor execution's findings."""
-    findings: List[AnomalyFinding] = []
-    active_cluster_ids: List[str] = []
-    resource_inventory: Optional[ResourceInventory] = None
-    fire_behavior_summary: Optional[Dict[str, Any]] = None
+    findings: list[AnomalyFinding] = []
+    active_cluster_ids: list[str] = []
+    resource_inventory: ResourceInventory | None = None
+    fire_behavior_summary: dict[str, Any] | None = None
 
 
 _state = _SupervisorToolState()
 
 
 def set_supervisor_tool_state(
-    findings: List[AnomalyFinding],
-    active_cluster_ids: List[str],
-    resource_inventory: Optional[ResourceInventory] = None,
-    fire_behavior_summary: Optional[Dict[str, Any]] = None,
+    findings: list[AnomalyFinding],
+    active_cluster_ids: list[str],
+    resource_inventory: ResourceInventory | None = None,
+    fire_behavior_summary: dict[str, Any] | None = None,
 ) -> None:
     """Called by the graph before the LLM/tool loop to load context."""
     _state.findings = list(findings)
@@ -77,7 +76,7 @@ def clear_supervisor_tool_state() -> None:
 # ── Tools ────────────────────────────────────────────────────────────────────
 
 @tool
-def get_all_findings(limit: int = 50) -> List[Dict[str, Any]]:
+def get_all_findings(limit: int = 50) -> list[dict[str, Any]]:
     """Return all cluster findings from the current supervisor execution.
 
     Args:
@@ -102,7 +101,7 @@ def get_all_findings(limit: int = 50) -> List[Dict[str, Any]]:
 
 
 @tool
-def get_findings_by_cluster(cluster_id: str) -> List[Dict[str, Any]]:
+def get_findings_by_cluster(cluster_id: str) -> list[dict[str, Any]]:
     """Return findings for a specific cluster.
 
     Args:
@@ -126,7 +125,7 @@ def get_findings_by_cluster(cluster_id: str) -> List[Dict[str, Any]]:
 
 
 @tool
-def get_finding_summary() -> Dict[str, Any]:
+def get_finding_summary() -> dict[str, Any]:
     """Compute aggregate statistics across all cluster findings.
 
     Returns:
@@ -164,7 +163,7 @@ def get_finding_summary() -> Dict[str, Any]:
 
 
 @tool
-def check_cross_cluster(anomaly_type: Optional[str] = None) -> Dict[str, Any]:
+def check_cross_cluster(anomaly_type: str | None = None) -> dict[str, Any]:
     """Detect correlated anomalies across multiple clusters.
 
     Looks for the same anomaly_type appearing in multiple clusters,
@@ -185,7 +184,7 @@ def check_cross_cluster(anomaly_type: Optional[str] = None) -> Dict[str, Any]:
         findings = [f for f in findings if f["anomaly_type"] == anomaly_type]
 
     # Group by anomaly_type → set of cluster_ids
-    type_to_clusters: Dict[str, set] = {}
+    type_to_clusters: dict[str, set] = {}
     for f in findings:
         type_to_clusters.setdefault(f["anomaly_type"], set()).add(f["cluster_id"])
 

@@ -27,7 +27,7 @@ implements tick() and to_dict().
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict
+from typing import Any
 
 from pydantic import BaseModel
 
@@ -69,7 +69,7 @@ class EnvironmentState(BaseModel, ABC):
         ...
 
     @abstractmethod
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """
         Serialise current state for logging and ground truth snapshots.
 

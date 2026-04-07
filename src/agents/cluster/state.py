@@ -37,7 +37,7 @@ Node responsibilities (skeleton — logic comes later)
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Dict, List, Literal, Optional
+from typing import Annotated, Any, Literal
 
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
@@ -45,13 +45,12 @@ from typing_extensions import TypedDict
 
 from transport.schemas import SensorEvent
 
-
 # ── Custom reducer for sensor event accumulation ──────────────────────────────
 
 def append_events(
-    existing: List[SensorEvent],
-    new: List[SensorEvent],
-) -> List[SensorEvent]:
+    existing: list[SensorEvent],
+    new: list[SensorEvent],
+) -> list[SensorEvent]:
     """
     Reducer that appends new sensor events to the existing list.
 
@@ -88,10 +87,10 @@ class AnomalyFinding(TypedDict):
     finding_id: str
     cluster_id: str
     anomaly_type: str
-    affected_sensors: List[str]
+    affected_sensors: list[str]
     confidence: float
     summary: str
-    raw_context: Dict[str, Any]
+    raw_context: dict[str, Any]
 
 
 # ── Cluster agent state ───────────────────────────────────────────────────────
@@ -114,21 +113,21 @@ class ClusterAgentState(TypedDict):
     # ── Incoming sensor data ──────────────────────────────────────────
     # Annotated with append_events reducer so new events accumulate.
     # ingest_events node writes here; classify node reads here.
-    sensor_events: Annotated[List[SensorEvent], append_events]
+    sensor_events: Annotated[list[SensorEvent], append_events]
 
     # The single most-recent event that triggered this invocation.
     # Separate from sensor_events so classify can easily find the trigger.
-    trigger_event: Optional[SensorEvent]
+    trigger_event: SensorEvent | None
 
     # ── LLM tool loop ─────────────────────────────────────────────────
     # add_messages reducer appends new messages rather than overwriting.
     # classify node reads and writes here via the ToolNode loop.
-    messages: Annotated[List[BaseMessage], add_messages]
+    messages: Annotated[list[BaseMessage], add_messages]
 
     # ── Findings output ───────────────────────────────────────────────
     # Populated by classify when anomalies are detected.
     # Read by report_findings to package for the supervisor.
-    anomalies: List[AnomalyFinding]
+    anomalies: list[AnomalyFinding]
 
     # ── Control ───────────────────────────────────────────────────────
     # idle       : Waiting for a new trigger event
@@ -137,4 +136,4 @@ class ClusterAgentState(TypedDict):
     # error      : Something went wrong — details in error_message
     status: Literal["idle", "processing", "complete", "error"]
 
-    error_message: Optional[str]
+    error_message: str | None

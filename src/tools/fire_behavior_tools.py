@@ -29,21 +29,19 @@ Design notes
 from __future__ import annotations
 
 import math
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from langchain_core.tools import tool
 
 from domains.wildfire.nwcg_resources import (
     INTENSITY_THRESHOLDS,
-    NWCG_CATALOG,
     suppression_category,
 )
-
 
 # ── State accessors ───────────────────────────────────────────────────────────
 # Read from the shared supervisor tool state to avoid a separate holder.
 
-def _get_fire_behavior() -> Optional[Dict[str, Any]]:
+def _get_fire_behavior() -> dict[str, Any] | None:
     """Read the fire behavior summary from the supervisor tool state."""
     from tools.supervisor_tools import _state as supervisor_state
     return supervisor_state.fire_behavior_summary
@@ -56,7 +54,7 @@ def _get_resource_inventory():
 
 
 def set_fire_behavior_tool_state(
-    fire_behavior_summary: Dict[str, Any],
+    fire_behavior_summary: dict[str, Any],
 ) -> None:
     """Convenience wrapper for standalone testing — sets fire behavior summary."""
     from tools.supervisor_tools import _state as supervisor_state
@@ -72,7 +70,7 @@ def clear_fire_behavior_tool_state() -> None:
 # ── Tools ────────────────────────────────────────────────────────────────────
 
 @tool
-def get_fire_behavior() -> Dict[str, Any]:
+def get_fire_behavior() -> dict[str, Any]:
     """Get current fire behavior metrics from the simulation.
 
     Returns Rothermel-derived fire behavior metrics for the current tick:
@@ -103,7 +101,7 @@ def get_fire_behavior() -> Dict[str, Any]:
 
 
 @tool
-def get_resource_needs(cluster_id: Optional[str] = None) -> Dict[str, Any]:
+def get_resource_needs(cluster_id: str | None = None) -> dict[str, Any]:
     """Estimate resource needs based on current fire behavior.
 
     Uses fireline intensity to determine which resource types can effectively
@@ -138,7 +136,7 @@ def get_resource_needs(cluster_id: Optional[str] = None) -> Dict[str, Any]:
     # Perimeter growth estimate (chains/hr).
     perimeter_chains_hr = round(max_ros * 60.0 * 2 * math.pi / 66.0, 1)
 
-    recommended: List[Dict[str, Any]] = []
+    recommended: list[dict[str, Any]] = []
 
     if cat == "hand_crew":
         # < 100 BTU/ft/s — hand crews can work the line.
@@ -248,7 +246,7 @@ def get_resource_needs(cluster_id: Optional[str] = None) -> Dict[str, Any]:
 
 
 @tool
-def compare_resources_to_needs(cluster_id: Optional[str] = None) -> Dict[str, Any]:
+def compare_resources_to_needs(cluster_id: str | None = None) -> dict[str, Any]:
     """Compare available resources against estimated needs for the current fire.
 
     Combines fire behavior assessment with resource inventory to produce
@@ -284,14 +282,14 @@ def compare_resources_to_needs(cluster_id: Optional[str] = None) -> Dict[str, An
             resources = inventory.all_resources()
         from resources.base import ResourceStatus
         available_resources = [r for r in resources if r.status == ResourceStatus.AVAILABLE]
-        available_by_type: Dict[str, int] = {}
+        available_by_type: dict[str, int] = {}
         for r in available_resources:
             available_by_type[r.resource_type] = available_by_type.get(r.resource_type, 0) + 1
     else:
         available_by_type = {}
 
     # Determine needed resources based on suppression category.
-    needed_by_type: Dict[str, int] = {}
+    needed_by_type: dict[str, int] = {}
     if cat in ("hand_crew",):
         needed_by_type["crew"] = 2
         needed_by_type["engine"] = 2
@@ -308,8 +306,8 @@ def compare_resources_to_needs(cluster_id: Optional[str] = None) -> Dict[str, An
         needed_by_type["helicopter"] = 2
 
     # Compute gaps and surplus.
-    gaps: List[str] = []
-    surplus: List[str] = []
+    gaps: list[str] = []
+    surplus: list[str] = []
     all_types = set(needed_by_type) | set(available_by_type)
 
     for rtype in sorted(all_types):

@@ -42,11 +42,12 @@ calling start() twice with the same workflow_id is safe.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from enum import Enum
-from typing import Any, Callable, Coroutine
+from collections.abc import Callable, Coroutine
+from enum import StrEnum
+from typing import Any
 
 
-class WorkflowStatus(str, Enum):
+class WorkflowStatus(StrEnum):
     """
     The possible states of a workflow execution.
 

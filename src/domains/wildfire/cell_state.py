@@ -19,11 +19,8 @@ import everything from one place.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from world.cell_state import CellState
 from world.grid import FireState, TerrainType
-
 
 # ── Cell state ───────────────────────────────────────────────────────────────
 
@@ -46,7 +43,7 @@ class FireCellState(CellState):
     # Fire state (changes during simulation via StateEvents)
     fire_state: FireState = FireState.UNBURNED
     fire_intensity: float = 0.0
-    fire_start_tick: Optional[int] = None
+    fire_start_tick: int | None = None
 
     # Rothermel fire behavior metrics (populated by RothermelFirePhysicsModule)
     # Zero on unburned/burned cells; updated each tick on burning cells.
@@ -81,7 +78,7 @@ class FireCellState(CellState):
         rate_of_spread_ft_min: float = 0.0,
         flame_length_ft: float = 0.0,
         fireline_intensity_btu_ft_s: float = 0.0,
-    ) -> "FireCellState":
+    ) -> FireCellState:
         """
         Return a new state with the cell on fire.
 
@@ -106,7 +103,7 @@ class FireCellState(CellState):
             "fireline_intensity_btu_ft_s": fireline_intensity_btu_ft_s,
         })
 
-    def extinguished(self) -> "FireCellState":
+    def extinguished(self) -> FireCellState:
         """Return a new state with the fire burned out. Zeros out fire behavior metrics."""
         return self.model_copy(update={
             "fire_state": FireState.BURNED,

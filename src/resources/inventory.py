@@ -39,7 +39,7 @@ from __future__ import annotations
 import logging
 import random
 from collections import Counter
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
 from resources.base import ResourceBase, ResourceStatus
 
@@ -70,9 +70,9 @@ class ResourceInventory:
         """
         self._grid_rows = grid_rows
         self._grid_cols = grid_cols
-        self._resources: Dict[str, ResourceBase] = {}           # resource_id → resource
-        self._type_index: Dict[str, Set[str]] = {}              # resource_type → {resource_ids}
-        self._cluster_index: Dict[str, Set[str]] = {}           # cluster_id → {resource_ids}
+        self._resources: dict[str, ResourceBase] = {}           # resource_id → resource
+        self._type_index: dict[str, set[str]] = {}              # resource_type → {resource_ids}
+        self._cluster_index: dict[str, set[str]] = {}           # cluster_id → {resource_ids}
 
     # ── Registration ─────────────────────────────────────────────────────────
 
@@ -133,14 +133,14 @@ class ResourceInventory:
         """Get a resource by its resource_id. Raises KeyError if not found."""
         return self._resources[resource_id]
 
-    def get_resources_at(self, row: int, col: int) -> List[ResourceBase]:
+    def get_resources_at(self, row: int, col: int) -> list[ResourceBase]:
         """Return all resources placed at the given grid position."""
         return [
             r for r in self._resources.values()
             if r.grid_row == row and r.grid_col == col
         ]
 
-    def all_resources(self) -> List[ResourceBase]:
+    def all_resources(self) -> list[ResourceBase]:
         """Return all registered resources."""
         return list(self._resources.values())
 
@@ -149,25 +149,25 @@ class ResourceInventory:
         """Number of registered resources."""
         return len(self._resources)
 
-    def by_type(self, resource_type: str) -> List[ResourceBase]:
+    def by_type(self, resource_type: str) -> list[ResourceBase]:
         """Return all resources of a given type."""
         rids = self._type_index.get(resource_type, set())
         return [self._resources[rid] for rid in rids]
 
-    def by_cluster(self, cluster_id: str) -> List[ResourceBase]:
+    def by_cluster(self, cluster_id: str) -> list[ResourceBase]:
         """Return all resources assigned to a given cluster."""
         rids = self._cluster_index.get(cluster_id, set())
         return [self._resources[rid] for rid in rids]
 
-    def by_status(self, status: ResourceStatus) -> List[ResourceBase]:
+    def by_status(self, status: ResourceStatus) -> list[ResourceBase]:
         """Return all resources with a given status."""
         return [r for r in self._resources.values() if r.status == status]
 
-    def resource_types(self) -> Set[str]:
+    def resource_types(self) -> set[str]:
         """Return the set of distinct resource_type values currently registered."""
         return set(self._type_index.keys())
 
-    def cluster_ids(self) -> Set[str]:
+    def cluster_ids(self) -> set[str]:
         """Return the set of distinct cluster_id values currently registered."""
         return set(self._cluster_index.keys())
 
@@ -176,8 +176,8 @@ class ResourceInventory:
     def deploy(
         self,
         resource_id: str,
-        row: Optional[int] = None,
-        col: Optional[int] = None,
+        row: int | None = None,
+        col: int | None = None,
     ) -> None:
         """
         Deploy a resource, optionally moving it to a new position.
@@ -212,7 +212,7 @@ class ResourceInventory:
 
     # ── Readiness queries ────────────────────────────────────────────────────
 
-    def readiness_summary(self) -> Dict[str, Any]:
+    def readiness_summary(self) -> dict[str, Any]:
         """
         Compute an overall readiness summary across all resources.
 
@@ -232,7 +232,7 @@ class ResourceInventory:
             }
 
         # By type
-        by_type: Dict[str, Dict[str, Any]] = {}
+        by_type: dict[str, dict[str, Any]] = {}
         for rtype in self._type_index:
             typed = self.by_type(rtype)
             by_type[rtype] = {
@@ -245,7 +245,7 @@ class ResourceInventory:
             }
 
         # By cluster
-        by_cluster: Dict[str, Dict[str, Any]] = {}
+        by_cluster: dict[str, dict[str, Any]] = {}
         for cid in self._cluster_index:
             clustered = self.by_cluster(cid)
             by_cluster[cid] = {
@@ -264,7 +264,7 @@ class ResourceInventory:
             "by_status": by_status,
         }
 
-    def coverage_by_cluster(self) -> Dict[str, List[str]]:
+    def coverage_by_cluster(self) -> dict[str, list[str]]:
         """
         Return which resource types are present in each cluster.
 
@@ -273,7 +273,7 @@ class ResourceInventory:
 
         Returns {cluster_id: [resource_type, ...]}.
         """
-        result: Dict[str, List[str]] = {}
+        result: dict[str, list[str]] = {}
         for cid in self._cluster_index:
             clustered = self.by_cluster(cid)
             result[cid] = sorted({r.resource_type for r in clustered})
@@ -285,7 +285,7 @@ class ResourceInventory:
         self,
         resource_type: str,
         keep_fraction: float,
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Randomly remove resources of a specific type.
 
@@ -321,7 +321,7 @@ class ResourceInventory:
         self,
         resource_type: str,
         fraction: float,
-    ) -> List[str]:
+    ) -> list[str]:
         """
         Randomly set a fraction of resources of a type to OUT_OF_SERVICE.
 

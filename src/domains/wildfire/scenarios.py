@@ -24,12 +24,10 @@ will the fire jump the ridge?  The agent has to monitor both sides.
 
 from __future__ import annotations
 
-from typing import Tuple
-
-from domains.wildfire.cell_state import FireCellState, FireState, TerrainType
+from domains.wildfire.cell_state import FireCellState, TerrainType
 from domains.wildfire.environment import FireEnvironmentState
 from domains.wildfire.physics import SimpleFirePhysicsModule
-from resources.base import ResourceBase, ResourceStatus
+from resources.base import ResourceBase
 from resources.inventory import ResourceInventory
 from world.generic_engine import GenericWorldEngine
 from world.generic_grid import GenericTerrainGrid
@@ -345,7 +343,7 @@ def create_full_wildfire_scenario(
     use_rothermel: bool = True,
     cell_size_ft: float = 200.0,
     time_step_min: float = 5.0,
-) -> Tuple[GenericWorldEngine[FireCellState], ResourceInventory]:
+) -> tuple[GenericWorldEngine[FireCellState], ResourceInventory]:
     """
     Convenience function that returns both the engine and resource inventory.
 

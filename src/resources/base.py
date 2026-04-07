@@ -59,8 +59,8 @@ location doesn't change.
 from __future__ import annotations
 
 import logging
-from enum import Enum
-from typing import Any, Dict, Optional
+from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -69,7 +69,7 @@ logger = logging.getLogger(__name__)
 
 # ── Resource status enum ─────────────────────────────────────────────────────
 
-class ResourceStatus(str, Enum):
+class ResourceStatus(StrEnum):
     """
     Operational state of a resource.
 
@@ -176,7 +176,7 @@ class ResourceBase(BaseModel):
     )
 
     # ── Domain extras ─────────────────────────────────────────────────
-    metadata: Dict[str, Any] = Field(
+    metadata: dict[str, Any] = Field(
         default_factory=dict,
         description="Domain-specific extras. e.g. {'unit': 'gallons', 'crew_size': 4}."
     )
@@ -188,8 +188,8 @@ class ResourceBase(BaseModel):
 
     def deploy(
         self,
-        row: Optional[int] = None,
-        col: Optional[int] = None,
+        row: int | None = None,
+        col: int | None = None,
     ) -> None:
         """
         Transition to DEPLOYED status.
@@ -314,7 +314,7 @@ class ResourceBase(BaseModel):
 
     # ── Serialisation ────────────────────────────────────────────────
 
-    def to_summary_dict(self) -> Dict[str, Any]:
+    def to_summary_dict(self) -> dict[str, Any]:
         """
         Compact summary for ground truth snapshots and LLM tool responses.
 

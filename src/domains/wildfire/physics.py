@@ -33,7 +33,7 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Any, Dict, List
+from typing import Any
 
 from domains.wildfire.cell_state import FireCellState, FireState
 from domains.wildfire.environment import FireEnvironmentState
@@ -73,7 +73,7 @@ class SimpleFirePhysicsModule(PhysicsModule[FireCellState]):
         grid: GenericTerrainGrid[FireCellState],
         environment: FireEnvironmentState,
         tick: int,
-    ) -> List[StateEvent[FireCellState]]:
+    ) -> list[StateEvent[FireCellState]]:
         """
         Compute one tick of fire spread.
 
@@ -82,7 +82,7 @@ class SimpleFirePhysicsModule(PhysicsModule[FireCellState]):
           2. For each unburned burnable neighbor, compute spread
              probability and roll the dice.
         """
-        events: List[StateEvent[FireCellState]] = []
+        events: list[StateEvent[FireCellState]] = []
 
         # Pre-compute values used for every burning cell.
         wind_row, wind_col = environment.wind_vector()
@@ -145,7 +145,7 @@ class SimpleFirePhysicsModule(PhysicsModule[FireCellState]):
 
     def summarize(
         self, grid: GenericTerrainGrid[FireCellState]
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Return a fire-specific summary of the grid.
 

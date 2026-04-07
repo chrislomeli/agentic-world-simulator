@@ -42,11 +42,11 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Any, Dict, List
+from typing import Any
 
 from domains.wildfire.cell_state import FireCellState, FireState
 from domains.wildfire.environment import FireEnvironmentState
-from domains.wildfire.fuel_models import FUEL_MODELS, FuelModel, get_fuel_model
+from domains.wildfire.fuel_models import FuelModel, get_fuel_model
 from world.generic_grid import GenericTerrainGrid
 from world.physics import PhysicsModule, StateEvent
 
@@ -102,7 +102,7 @@ class RothermelFirePhysicsModule(PhysicsModule[FireCellState]):
         grid: GenericTerrainGrid[FireCellState],
         environment: FireEnvironmentState,
         tick: int,
-    ) -> List[StateEvent[FireCellState]]:
+    ) -> list[StateEvent[FireCellState]]:
         """
         Compute one tick of Rothermel fire spread.
 
@@ -114,10 +114,9 @@ class RothermelFirePhysicsModule(PhysicsModule[FireCellState]):
              convert to spread probability, and roll.
           5. Ignited cells carry over the source cell's metrics at ignition.
         """
-        events: List[StateEvent[FireCellState]] = []
+        events: list[StateEvent[FireCellState]] = []
 
         wind_row, wind_col = environment.wind_vector()
-        wind_mph = environment.wind_speed_mps * _MPS_TO_MPH
 
         burning = grid.cells_where(
             lambda c: c.cell_state.fire_state == FireState.BURNING
@@ -232,7 +231,7 @@ class RothermelFirePhysicsModule(PhysicsModule[FireCellState]):
 
     def summarize(
         self, grid: GenericTerrainGrid[FireCellState]
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Return a fire-specific summary including Rothermel behavior metrics.
 
@@ -246,9 +245,9 @@ class RothermelFirePhysicsModule(PhysicsModule[FireCellState]):
         """
         burning_cells = []
         intensity_map = []
-        ros_values: List[float] = []
-        flame_values: List[float] = []
-        fi_values: List[float] = []
+        ros_values: list[float] = []
+        flame_values: list[float] = []
+        fi_values: list[float] = []
 
         for r in range(grid.rows):
             row_intensities = []

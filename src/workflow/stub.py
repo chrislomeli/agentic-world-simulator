@@ -64,7 +64,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Callable, Coroutine, Dict, Optional, Tuple
+from collections.abc import Callable, Coroutine
+from typing import Any
 
 from workflow.runner import WorkflowRunner, WorkflowStatus
 
@@ -72,7 +73,7 @@ logger = logging.getLogger(__name__)
 
 # Type alias for a signal tuple stored in the per-workflow queue.
 # (signal_name, payload) — the workflow reads these in order.
-_Signal = Tuple[str, Any]
+_Signal = tuple[str, Any]
 
 
 class AsyncioWorkflowRunner(WorkflowRunner):
@@ -87,15 +88,15 @@ class AsyncioWorkflowRunner(WorkflowRunner):
     def __init__(self) -> None:
         # Maps workflow_id → current status.
         # Populated by start(), updated when the task finishes or fails.
-        self._statuses: Dict[str, WorkflowStatus] = {}
+        self._statuses: dict[str, WorkflowStatus] = {}
 
         # Maps workflow_id → asyncio Task.
         # Kept so we can cancel tasks on shutdown.
-        self._tasks: Dict[str, asyncio.Task] = {}
+        self._tasks: dict[str, asyncio.Task] = {}
 
         # Maps workflow_id → asyncio.Queue[_Signal].
         # Each workflow reads from its own queue to receive signals.
-        self._signal_queues: Dict[str, asyncio.Queue[_Signal]] = {}
+        self._signal_queues: dict[str, asyncio.Queue[_Signal]] = {}
 
     # ── WorkflowRunner interface ──────────────────────────────────────────────
 
@@ -198,8 +199,8 @@ class AsyncioWorkflowRunner(WorkflowRunner):
     async def receive_signal(
         self,
         workflow_id: str,
-        timeout_seconds: Optional[float] = None,
-    ) -> Optional[_Signal]:
+        timeout_seconds: float | None = None,
+    ) -> _Signal | None:
         """
         Wait for and return the next signal for a workflow.
 
@@ -235,7 +236,7 @@ class AsyncioWorkflowRunner(WorkflowRunner):
                 # Block indefinitely until a signal arrives.
                 signal = await queue.get()
             return signal
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return None
 
     async def shutdown(self) -> None:

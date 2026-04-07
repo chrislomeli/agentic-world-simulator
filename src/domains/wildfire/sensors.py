@@ -31,13 +31,12 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Any, Dict, List
+from typing import Any
 
 from domains.wildfire.cell_state import FireCellState, FireState
 from domains.wildfire.environment import FireEnvironmentState
 from sensors.base import SensorBase
 from world.generic_engine import GenericWorldEngine
-
 
 # ── Temperature sensor ───────────────────────────────────────────────────────
 
@@ -65,7 +64,7 @@ class TemperatureSensor(SensorBase):
         self._engine = engine
         self._noise_std = noise_std
 
-    def read(self) -> Dict[str, Any]:
+    def read(self) -> dict[str, Any]:
         env: FireEnvironmentState = self._engine.environment  # type: ignore[assignment]
         base_temp = env.temperature_c
 
@@ -115,7 +114,7 @@ class HumiditySensor(SensorBase):
         self._engine = engine
         self._noise_std = noise_std
 
-    def read(self) -> Dict[str, Any]:
+    def read(self) -> dict[str, Any]:
         env: FireEnvironmentState = self._engine.environment  # type: ignore[assignment]
         humidity = env.humidity_pct + random.gauss(0, self._noise_std)
         humidity = max(0.0, min(100.0, humidity))
@@ -153,7 +152,7 @@ class WindSensor(SensorBase):
         self._speed_noise_std = speed_noise_std
         self._direction_noise_std = direction_noise_std
 
-    def read(self) -> Dict[str, Any]:
+    def read(self) -> dict[str, Any]:
         env: FireEnvironmentState = self._engine.environment  # type: ignore[assignment]
         speed = max(0.0, env.wind_speed_mps + random.gauss(0, self._speed_noise_std))
         direction = (env.wind_direction_deg + random.gauss(0, self._direction_noise_std)) % 360.0
@@ -194,7 +193,7 @@ class SmokeSensor(SensorBase):
         self._engine = engine
         self._noise_std = noise_std
 
-    def read(self) -> Dict[str, Any]:
+    def read(self) -> dict[str, Any]:
         env: FireEnvironmentState = self._engine.environment  # type: ignore[assignment]
         baseline_pm25 = 5.0
 
@@ -258,7 +257,7 @@ class BarometricSensor(SensorBase):
         self._engine = engine
         self._noise_std = noise_std
 
-    def read(self) -> Dict[str, Any]:
+    def read(self) -> dict[str, Any]:
         env: FireEnvironmentState = self._engine.environment  # type: ignore[assignment]
         pressure = env.pressure_hpa + random.gauss(0, self._noise_std)
         return {"pressure_hpa": round(pressure, 1), "unit": "hPa"}
@@ -299,13 +298,13 @@ class ThermalCameraSensor(SensorBase):
         self._view_cols = view_cols
         self._noise_std = noise_std
 
-    def read(self) -> Dict[str, Any]:
+    def read(self) -> dict[str, Any]:
         env: FireEnvironmentState = self._engine.environment  # type: ignore[assignment]
         ambient = env.temperature_c
-        heat_grid: List[List[float]] = []
+        heat_grid: list[list[float]] = []
 
         for r in range(self._top_row, self._top_row + self._view_rows):
-            row_temps: List[float] = []
+            row_temps: list[float] = []
             for c in range(self._left_col, self._left_col + self._view_cols):
                 if 0 <= r < self._engine.grid.rows and 0 <= c < self._engine.grid.cols:
                     state = self._engine.grid.get_cell(r, c).cell_state

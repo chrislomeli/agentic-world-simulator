@@ -69,8 +69,8 @@ metadata    : Optional dict for extras that don't fit elsewhere.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from typing import Any, Dict
+from datetime import UTC, datetime
+from typing import Any
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -118,11 +118,11 @@ class SensorEvent(BaseModel):
     )
 
     # ── Opaque content ────────────────────────────────────────────────
-    payload: Dict[str, Any] = Field(
+    payload: dict[str, Any] = Field(
         default_factory=dict,
         description="Domain-specific reading data. Envelope never inspects this."
     )
-    metadata: Dict[str, Any] = Field(
+    metadata: dict[str, Any] = Field(
         default_factory=dict,
         description="Optional pass-through extras. Firmware version, GPS coords, etc."
     )
@@ -136,11 +136,11 @@ class SensorEvent(BaseModel):
         source_id: str,
         source_type: str,
         cluster_id: str,
-        payload: Dict[str, Any],
+        payload: dict[str, Any],
         confidence: float = 1.0,
         sim_tick: int = 0,
-        metadata: Dict[str, Any] | None = None,
-    ) -> "SensorEvent":
+        metadata: dict[str, Any] | None = None,
+    ) -> SensorEvent:
         """
         Build an envelope with auto-generated event_id and current UTC timestamp.
 
@@ -162,7 +162,7 @@ class SensorEvent(BaseModel):
             source_id=source_id,
             source_type=source_type,
             cluster_id=cluster_id,
-            timestamp=datetime.now(timezone.utc),
+            timestamp=datetime.now(UTC),
             sim_tick=sim_tick,
             confidence=confidence,
             payload=payload,

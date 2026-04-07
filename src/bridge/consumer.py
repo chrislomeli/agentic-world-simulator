@@ -36,7 +36,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Callable, Dict, List, Optional
+from collections.abc import Callable
+from typing import Any
 
 from agents.cluster.state import AnomalyFinding
 from transport.queue import SensorEventQueue
@@ -70,7 +71,7 @@ class EventBridgeConsumer:
         *,
         queue: SensorEventQueue,
         agent_graph: Any,
-        on_finding: Optional[Callable[[AnomalyFinding], None]] = None,
+        on_finding: Callable[[AnomalyFinding], None] | None = None,
         batch_size: int = 1,
     ) -> None:
         self._queue = queue
@@ -79,10 +80,10 @@ class EventBridgeConsumer:
         self._batch_size = max(1, batch_size)
 
         # Per-cluster event buffers for batching.
-        self._buffers: Dict[str, List[SensorEvent]] = {}
+        self._buffers: dict[str, list[SensorEvent]] = {}
 
         # All findings collected across all invocations.
-        self.collected_findings: List[AnomalyFinding] = []
+        self.collected_findings: list[AnomalyFinding] = []
 
         # Total events consumed.
         self.events_consumed: int = 0
@@ -97,7 +98,7 @@ class EventBridgeConsumer:
         logger.info("EventBridgeConsumer stop requested")
         self._stop_requested = True
 
-    async def run(self, max_events: Optional[int] = None) -> None:
+    async def run(self, max_events: int | None = None) -> None:
         """
         Run the consumer loop.
 
@@ -138,7 +139,7 @@ class EventBridgeConsumer:
             # Use wait_for with a short timeout so we can check stop conditions.
             try:
                 event = await asyncio.wait_for(self._queue.get(), timeout=0.5)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
 
             self.events_consumed += 1

@@ -46,7 +46,8 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Dict, Literal, List, Optional
+from datetime import UTC
+from typing import Literal
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -127,7 +128,7 @@ If no action is needed, return: {{"commands": [], "reasoning": "No action needed
 
 # ── Node functions ────────────────────────────────────────────────────────────
 
-def fan_out_to_clusters(state: SupervisorState) -> List[Send]:
+def fan_out_to_clusters(state: SupervisorState) -> list[Send]:
     """
     Fan out to all active cluster agents using the Send API.
 
@@ -201,7 +202,7 @@ def run_cluster_agent(state: ClusterAgentState) -> dict:
     }
 
 
-def assess_situation(state: SupervisorState, store: Optional[BaseStore] = None) -> dict:
+def assess_situation(state: SupervisorState, store: BaseStore | None = None) -> dict:
     """
     Stub assess_situation node — used when no LLM is provided.
 
@@ -260,9 +261,9 @@ def decide_actions(state: SupervisorState) -> dict:
 
 def _make_assess_llm_node(
     llm_with_tools: BaseChatModel,
-    store: Optional[BaseStore] = None,
-    resource_inventory: Optional[ResourceInventory] = None,
-    fire_behavior_summary: Optional[Dict] = None,
+    store: BaseStore | None = None,
+    resource_inventory: ResourceInventory | None = None,
+    fire_behavior_summary: dict | None = None,
 ):
     """
     Factory that returns an assess_situation node backed by an LLM.
@@ -388,8 +389,8 @@ def _parse_assessment(state: SupervisorState) -> dict:
 
 def _make_decide_llm_node(
     llm_with_tools: BaseChatModel,
-    resource_inventory: Optional[ResourceInventory] = None,
-    fire_behavior_summary: Optional[Dict] = None,
+    resource_inventory: ResourceInventory | None = None,
+    fire_behavior_summary: dict | None = None,
 ):
     """
     Factory that returns a decide_actions node backed by an LLM.
@@ -502,7 +503,7 @@ def _parse_commands(state: SupervisorState) -> dict:
     }
 
 
-def dispatch_commands(state: SupervisorState, store: Optional[BaseStore] = None) -> dict:
+def dispatch_commands(state: SupervisorState, store: BaseStore | None = None) -> dict:
     """
     Send actuator commands and write the situation summary to the Store.
 
@@ -522,8 +523,8 @@ def dispatch_commands(state: SupervisorState, store: Optional[BaseStore] = None)
     logger.info("Supervisor dispatching %d command(s)", len(commands))
 
     if store is not None and summary:
-        from datetime import datetime, timezone
-        ts = datetime.now(timezone.utc).isoformat()
+        from datetime import datetime
+        ts = datetime.now(UTC).isoformat()
         store.put(
             ("situations", "global"),
             ts,
@@ -590,10 +591,10 @@ def route_after_decide(
 # ── Graph builder ─────────────────────────────────────────────────────────────
 
 def build_supervisor_graph(
-    llm: Optional[BaseChatModel] = None,
-    store: Optional[BaseStore] = None,
-    resource_inventory: Optional[ResourceInventory] = None,
-    fire_behavior_summary: Optional[Dict] = None,
+    llm: BaseChatModel | None = None,
+    store: BaseStore | None = None,
+    resource_inventory: ResourceInventory | None = None,
+    fire_behavior_summary: dict | None = None,
 ):
     """
     Compile and return the supervisor graph.

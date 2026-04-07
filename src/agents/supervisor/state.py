@@ -36,7 +36,7 @@ messages: Standard add_messages from LangGraph — appends, never overwrites.
 
 from __future__ import annotations
 
-from typing import Annotated, List, Literal, Optional
+from typing import Annotated, Literal
 
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
@@ -45,13 +45,12 @@ from typing_extensions import TypedDict
 from actuators.base import ActuatorCommand
 from agents.cluster.state import AnomalyFinding
 
-
 # ── Custom reducer for aggregating cluster findings ───────────────────────────
 
 def aggregate_findings_reducer(
-    existing: List[AnomalyFinding],
-    incoming: List[AnomalyFinding],
-) -> List[AnomalyFinding]:
+    existing: list[AnomalyFinding],
+    incoming: list[AnomalyFinding],
+) -> list[AnomalyFinding]:
     """
     Accumulate findings from cluster agents.
 
@@ -81,26 +80,26 @@ class SupervisorState(TypedDict):
     # ── Trigger context ───────────────────────────────────────────────
     # Which clusters have active events that triggered this run.
     # The supervisor fans out to ALL of these via Send API.
-    active_cluster_ids: List[str]
+    active_cluster_ids: list[str]
 
     # ── Aggregated findings ───────────────────────────────────────────
     # Populated by cluster agents via Send API fan-out.
     # aggregate_findings_reducer merges results from each cluster.
-    cluster_findings: Annotated[List[AnomalyFinding], aggregate_findings_reducer]
+    cluster_findings: Annotated[list[AnomalyFinding], aggregate_findings_reducer]
 
     # ── LLM reasoning ────────────────────────────────────────────────
     # The supervisor's own tool loop for cross-cluster correlation.
-    messages: Annotated[List[BaseMessage], add_messages]
+    messages: Annotated[list[BaseMessage], add_messages]
 
     # ── Decision output ───────────────────────────────────────────────
     # Commands the supervisor decides to issue after assessing findings.
     # Set by decide_actions node, consumed by dispatch_commands node.
-    pending_commands: List[ActuatorCommand]
+    pending_commands: list[ActuatorCommand]
 
     # ── Situation summary ─────────────────────────────────────────────
     # Human-readable summary of what the supervisor determined.
     # Written by assess_situation, used in notifications and audit log.
-    situation_summary: Optional[str]
+    situation_summary: str | None
 
     # ── Control ───────────────────────────────────────────────────────
     status: Literal[
@@ -113,4 +112,4 @@ class SupervisorState(TypedDict):
         "error",
     ]
 
-    error_message: Optional[str]
+    error_message: str | None

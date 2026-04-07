@@ -1,8 +1,3 @@
-from world.generic_engine import GenericWorldEngine, GenericGroundTruthSnapshot
-from world.environment import EnvironmentState
-from world.physics import PhysicsModule, StateEvent
-from world.weather import WeatherState
-
 """
 ogar.world
 
@@ -28,15 +23,32 @@ evaluate the agent's decisions against what was actually happening.
 This package does NOT contain LangGraph, Kafka, or agent logic.
 It is pure simulation — deterministic (given a seed), stateful,
 and fast enough to generate thousands of scenarios offline.
-
-Modules
-───────
-  grid.py              ← TerrainGrid: 2D cells with vegetation, moisture, fire state
-  weather.py           ← WeatherState: global weather that evolves per tick
-  engine.py            ← WorldEngine: the tick loop that coordinates everything
-  fire_spread/         ← Pluggable fire behaviour models
-    interface.py       ← FireSpreadModule ABC (the contract)
-    heuristic.py       ← FireSpreadHeuristic (placeholder implementation)
-  scenarios/           ← Factory functions that configure named scenarios
-    wildfire_basic.py  ← Simple wildfire on a small grid
 """
+
+from world.cell_state import CellState as CellState
+from world.cell_state import GenericCell as GenericCell
+from world.environment import EnvironmentState as EnvironmentState
+from world.generic_engine import GenericGroundTruthSnapshot as GenericGroundTruthSnapshot
+from world.generic_engine import GenericWorldEngine as GenericWorldEngine
+from world.generic_grid import GenericTerrainGrid as GenericTerrainGrid
+from world.grid import FireState as FireState
+from world.grid import TerrainType as TerrainType
+from world.physics import PhysicsModule as PhysicsModule
+from world.physics import StateEvent as StateEvent
+from world.sensor_inventory import SensorInventory as SensorInventory
+from world.weather import WeatherState as WeatherState
+
+__all__ = [
+    "CellState",
+    "GenericCell",
+    "EnvironmentState",
+    "GenericGroundTruthSnapshot",
+    "GenericWorldEngine",
+    "GenericTerrainGrid",
+    "FireState",
+    "TerrainType",
+    "PhysicsModule",
+    "StateEvent",
+    "SensorInventory",
+    "WeatherState",
+]

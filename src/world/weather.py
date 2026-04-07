@@ -59,7 +59,7 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Any, Dict, Optional
+from typing import Any
 
 
 class WeatherState:
@@ -204,7 +204,7 @@ class WeatherState:
 
         return (row_delta, col_delta)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Serialise current weather for logging / sensor input."""
         return {
             "temperature_c": round(self.temperature_c, 1),

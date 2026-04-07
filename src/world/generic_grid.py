@@ -36,7 +36,8 @@ Nothing else should mutate cell state — this enforces the
 
 from __future__ import annotations
 
-from typing import Any, Callable, Dict, Generic, Iterator, List, Tuple, TypeVar
+from collections.abc import Callable, Iterator
+from typing import Any, Generic, TypeVar
 
 from world.cell_state import CellState, GenericCell
 
@@ -82,14 +83,14 @@ class GenericTerrainGrid(Generic[C]):
         self.rows = rows
         self.cols = cols
         self.layers = layers
-        self._cells: List[List[List[GenericCell[C]]]] = [
+        self._cells: list[list[list[GenericCell[C]]]] = [
             [
                 [
                     GenericCell(
-                        row=r, col=c, layer=l,
-                        cell_state=initial_state_factory(r, c, l),
+                        row=r, col=c, layer=layer,
+                        cell_state=initial_state_factory(r, c, layer),
                     )
-                    for l in range(layers)
+                    for layer in range(layers)
                 ]
                 for c in range(cols)
             ]
@@ -112,7 +113,7 @@ class GenericTerrainGrid(Generic[C]):
 
     def neighbors(
         self, row: int, col: int, layer: int = 0,
-    ) -> List[Tuple[int, int, int]]:
+    ) -> list[tuple[int, int, int]]:
         """
         Return the (row, col, layer) coordinates of all valid neighbors.
 
@@ -160,7 +161,7 @@ class GenericTerrainGrid(Generic[C]):
 
     def cells_where(
         self, predicate: Callable[[GenericCell[C]], bool]
-    ) -> List[Tuple[int, int, int]]:
+    ) -> list[tuple[int, int, int]]:
         """
         Return (row, col, layer) for all cells matching a predicate.
 
@@ -175,7 +176,7 @@ class GenericTerrainGrid(Generic[C]):
             if predicate(cell)
         ]
 
-    def snapshot(self) -> Dict[str, Any]:
+    def snapshot(self) -> dict[str, Any]:
         """
         Return a complete serialised snapshot of the grid.
 
@@ -190,8 +191,8 @@ class GenericTerrainGrid(Generic[C]):
             "cells": [
                 [
                     [
-                        self._cells[r][c][l].to_dict()
-                        for l in range(self.layers)
+                        self._cells[r][c][layer].to_dict()
+                        for layer in range(self.layers)
                     ]
                     for c in range(self.cols)
                 ]
@@ -199,14 +200,14 @@ class GenericTerrainGrid(Generic[C]):
             ],
         }
 
-    def summary_counts(self) -> Dict[str, int]:
+    def summary_counts(self) -> dict[str, int]:
         """
         Count cells by their summary_label.
 
         Returns e.g. {"BURNING": 5, "UNBURNED": 85, "BURNED": 10}
         or {"INFECTED": 20, "HEALTHY": 80} depending on the domain.
         """
-        counts: Dict[str, int] = {}
+        counts: dict[str, int] = {}
         for cell in self.iter_cells():
             label = cell.cell_state.summary_label()
             counts[label] = counts.get(label, 0) + 1
