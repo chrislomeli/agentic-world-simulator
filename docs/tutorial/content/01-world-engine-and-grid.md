@@ -46,6 +46,7 @@ git checkout tutorial/main -- src/sensors/
 git checkout tutorial/main -- src/transport/
 git checkout tutorial/main -- src/bridge/
 git checkout tutorial/main -- src/resources/
+git checkout tutorial/main -- src/tools/
 git checkout tutorial/main -- src/config.py
 git checkout tutorial/main -- tests/
 ```
