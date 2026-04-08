@@ -3,9 +3,19 @@ ogar.agents.supervisor.graph
 
 Supervisor agent LangGraph graph — supports both stub and LLM modes.
 
+The supervisor owns the complete analysis workflow for a batch of
+triggered locations:
+
+  1. Fan out to cluster agents via Send API (parallel per-location analysis)
+  2. Wait for all cluster agents (synchronization barrier)
+  3. Assess the overall situation across clusters
+  4. Decide what actuator commands to issue
+  5. Dispatch commands to actuators
+
 Topology (stub mode — no LLM):
   START
-    → fan_out_to_clusters → run_cluster_agent (parallel)
+    → fan_out_to_clusters → run_cluster_agent (parallel, one per location)
+    → [synchronization barrier — LangGraph waits for all]
     → assess_situation (stub summary)
     → decide_actions (stub — no commands)
     → dispatch_commands → END
@@ -13,11 +23,23 @@ Topology (stub mode — no LLM):
 Topology (LLM mode — with tools):
   START
     → fan_out_to_clusters → run_cluster_agent (parallel)
+    → [synchronization barrier]
     → assess_situation_llm → [tool_calls] → assess_tool_node → loop
                            → [done] → parse_assessment
     → decide_actions_llm   → [tool_calls] → decide_tool_node → loop
                            → [done] → parse_commands
     → dispatch_commands → END
+
+The Send API pattern
+─────────────────────
+fan_out_to_clusters returns a list of Send() objects — one per cluster.
+Each Send() targets "run_cluster_agent" with a ClusterAgentState dict.
+LangGraph runs all of them in parallel.  Results are merged back into
+SupervisorState via the aggregate_findings_reducer.
+
+This is the key LangGraph skill this graph demonstrates:
+  "dynamic fan-out where the number of targets is known only at runtime,
+   with an implicit synchronization barrier before the next phase."
 
 Usage:
   # Stub mode (default — no API key needed):
@@ -28,18 +50,17 @@ Usage:
   llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
   graph = build_supervisor_graph(llm=llm)
 
-The Send API pattern
-─────────────────────
-fan_out_to_clusters returns a list of Send() objects — one per cluster.
-Each Send() looks like:
-  Send("run_cluster_agent", cluster_agent_state_dict)
-
-LangGraph runs all of them in parallel.  Each one invokes the cluster
-agent subgraph with its own isolated state.  Results are merged back
-into SupervisorState via the aggregate_findings_reducer.
-
-This is the key LangGraph skill this graph demonstrates:
-  "dynamic fan-out where the number of targets is known only at runtime"
+  # Invocation (from event loop on_batch or supervisor_runner):
+  result = graph.invoke({
+      "active_cluster_ids": ["loc-A", "loc-B"],
+      "events_by_cluster": {"loc-A": [...], "loc-B": [...]},
+      "cluster_findings": [],
+      "messages": [],
+      "pending_commands": [],
+      "situation_summary": None,
+      "status": "idle",
+      "error_message": None,
+  })
 """
 
 import json
@@ -137,13 +158,16 @@ def fan_out_to_clusters(state: SupervisorState) -> list[Send]:
     nodes in parallel, then merge their state changes with the parent."
 
     Each Send() targets the "run_cluster_agent" node and passes it
-    a ClusterAgentState-shaped dict as input, including the sensor events
-    collected by the bridge consumer for that cluster.
+    a ClusterAgentState-shaped dict as input, including the events
+    collected for that cluster/location.
 
     This is the dynamic fan-out pattern — the number of clusters is
     determined at runtime from state["active_cluster_ids"].
     If there are 3 active clusters, 3 cluster agents run in parallel.
-    If there is 1, only 1 runs.  No code changes.
+    If there is 1, only 1 runs.  No code changes needed.
+
+    After ALL cluster agents complete (the synchronization barrier),
+    LangGraph advances to assess_situation with the accumulated findings.
     """
     cluster_ids = state.get("active_cluster_ids", [])
     events_by_cluster = state.get("events_by_cluster", {})
@@ -181,7 +205,7 @@ def run_cluster_agent(state: ClusterAgentState) -> dict:
     agent graph synchronously.
 
     The results (specifically state["anomalies"]) are mapped back to
-    the supervisor's cluster_findings via the graph output mapping.
+    the supervisor's cluster_findings via the aggregate_findings_reducer.
 
     Note: LangGraph runs this node once per Send() — so if there are
     3 active clusters, this function runs 3 times in parallel.
@@ -190,13 +214,8 @@ def run_cluster_agent(state: ClusterAgentState) -> dict:
     cluster_id = state.get("cluster_id", "unknown")
     logger.info("Supervisor invoking cluster agent for cluster=%s", cluster_id)
 
-    # Invoke the compiled cluster agent subgraph.
-    # .invoke() runs the graph to completion and returns the final state.
     result_state = cluster_agent_graph.invoke(state)
 
-    # Return only the fields we want merged into the supervisor's state.
-    # The aggregate_findings_reducer on cluster_findings will accumulate
-    # the anomalies from all cluster agents.
     return {
         "cluster_findings": result_state.get("anomalies", []),
     }
@@ -615,13 +634,6 @@ def build_supervisor_graph(
     fire_behavior_summary : Optional dict from RothermelFirePhysicsModule.summarize().
             When provided in LLM mode, fire behavior tools are added so the
             LLM can assess fire intensity and resource sizing.  Ignored in stub mode.
-
-    Store architecture note
-    ───────────────────────
-    The supervisor does NOT pass the store to its internal cluster agent
-    invocations (run_cluster_agent).  Cluster agents write findings to the
-    store via their own report_findings node — the supervisor reads past
-    incidents from the store in assess_situation to build historical context.
     """
     builder = StateGraph(SupervisorState)
 
@@ -664,7 +676,7 @@ def build_supervisor_graph(
         builder.add_node("decide_tool_node", ToolNode(all_tools))
         builder.add_node("parse_commands", _parse_commands)
 
-        # Wiring: fan_out → cluster agents → assess loop → decide loop
+        # Wiring: fan_out → cluster agents → assess loop → decide loop → dispatch
         builder.add_edge("run_cluster_agent", "assess_situation")
         builder.add_conditional_edges("assess_situation", route_after_assess_llm)
         builder.add_edge("assess_tool_node", "assess_situation")

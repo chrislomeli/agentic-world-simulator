@@ -23,13 +23,13 @@ Let's trace each step!
 
 import asyncio
 
+from examples.config_builder import configure_environment
+from examples.pipeline_builder import build_pipeline
+from examples.supervisor_runner import run_with_supervisor
 from langgraph.store.memory import InMemoryStore
 
 from agents.supervisor.graph import build_supervisor_graph
 from domains.wildfire.scenario_loader import load_scenario_from_json
-from examples.config_builder import configure_environment
-from examples.pipeline_builder import build_pipeline
-from examples.supervisor_runner import run_with_supervisor
 from world.grid import FireState, TerrainType
 
 
@@ -192,17 +192,20 @@ async def main():
     # with:  events = await pipeline.run_to_completion(num_ticks=20)
     pipeline = build_pipeline(engine, sensor_inventory)
 
+
     # ───────────────────────────────────────────────────────────────────────────
-    # STEP 05: Build the supervisor and wire it to the pipeline
+    # STEP 05: Build the supervisor graph and wire it to the pipeline
     # ───────────────────────────────────────────────────────────────────────────
     #
-    # The supervisor is a separate concern.  It gets events by calling
-    # pipeline.drain_batch() — the same interface a Kafka consumer would
-    # expose.  The supervisor doesn't know how events are produced.
+    # One graph invocation does everything:
+    #   supervisor_graph.invoke({events_by_cluster: ...})
+    #     → fan_out_to_clusters (Send API) → cluster agents in parallel
+    #     → [synchronization barrier]
+    #     → assess_situation → decide_actions → dispatch_commands
 
     store = InMemoryStore()
     supervisor_graph = build_supervisor_graph(llm=llm, store=store)
-    print(f"Supervisor agent: {mode} mode  (store: {type(store).__name__})")
+    print(f"Supervisor graph: {mode} mode  (store: {type(store).__name__})")
 
     num_ticks = 20
     supervisor_interval = 10

@@ -2,17 +2,20 @@
 """
 supervisor_runner.py  —  STEP 05: Wire the supervisor to the pipeline
 
-This module is separate from the pipeline. It doesn't know how events are
-produced or transported — it only knows how to *get* them via a callable:
+The orchestrator connects the pipeline to the supervisor graph:
 
-    get_events() → dict[str, list[SensorEvent]]
+    Pipeline (LangGraph-free)
+        → drain_batch() → events grouped by cluster
+    Supervisor graph (single invocation does everything)
+        → fan_out_to_clusters (Send API) → cluster agents in parallel
+        → [synchronization barrier]
+        → assess_situation → decide_actions → dispatch_commands
 
-Today that callable is pipeline.drain_batch().  In a distributed system
-it would be a Kafka consumer's poll()+group method.  The supervisor
-doesn't know or care.
+The orchestrator's job is simple: periodically drain events and invoke
+the supervisor.  All agent logic lives inside the graph.
 
-Usage (standalone)
-──────────────────
+Usage
+─────
   pipeline = build_pipeline(engine, sensor_inventory)
   supervisor_graph = build_supervisor_graph(llm=llm, store=store)
 
@@ -22,15 +25,12 @@ Usage (standalone)
       num_ticks=20,
       supervisor_interval=10,
   )
-
-The pipeline is started and stopped here because in this co-located setup
-we own both sides.  In production the pipeline (publisher) would already
-be running remotely — only the consumer/drain side would be local.
 """
 
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Callable
 from typing import Any
 
@@ -39,8 +39,9 @@ import langsmith
 from bridge.pipeline_runner import PipelineRunner
 from transport.schemas import SensorEvent
 
+logger = logging.getLogger(__name__)
+
 # Type alias for the event source callable.
-# This is the contract between the pipeline and the supervisor layer.
 # In-memory: pipeline.drain_batch
 # Kafka:     kafka_consumer.poll_and_group
 EventSourceFn = Callable[[], dict[str, list[SensorEvent]]]
@@ -56,6 +57,9 @@ async def run_with_supervisor(
 ) -> list[tuple[int, dict]]:
     """
     Run the pipeline with periodic supervisor invocations.
+
+    Each interval: drain events → invoke supervisor graph (which
+    internally fans out to cluster agents, waits, correlates, decides).
 
     Parameters
     ──────────
@@ -74,9 +78,6 @@ async def run_with_supervisor(
     print("=" * 65)
 
     supervisor_results: list[tuple[int, dict]] = []
-
-    # The only thing we use from the pipeline is drain_batch.
-    # This is the same interface a Kafka consumer would expose.
     get_events: EventSourceFn = pipeline.drain_batch
 
     with langsmith.trace(
@@ -88,10 +89,8 @@ async def run_with_supervisor(
             "supervisor_interval": supervisor_interval,
         },
     ):
-        # Start the pipeline (publisher + consumer as concurrent tasks)
         await pipeline.start(num_ticks=num_ticks, tick_interval=0.0)
 
-        # Orchestration loop: poll for events, invoke supervisor periodically
         last_supervisor_tick = 0
         while pipeline.is_running:
             await asyncio.sleep(0.05)
@@ -118,7 +117,6 @@ async def run_with_supervisor(
                 )
             )
 
-        # Clean shutdown
         await pipeline.stop()
 
     return supervisor_results
@@ -126,7 +124,7 @@ async def run_with_supervisor(
 
 def _invoke_supervisor(
     supervisor_graph: Any,
-    batch: dict[str, list[SensorEvent]],
+    batch: dict[str, list],
     tick: int,
     mode: str,
     label: str | None = None,
@@ -134,7 +132,8 @@ def _invoke_supervisor(
     """
     Invoke the supervisor graph with a batch of events.
 
-    Factored out to keep the orchestration loop clean.
+    The supervisor handles everything internally:
+      fan-out to cluster agents → synchronization → assess → decide → dispatch
     """
     run_label = label or f"tick-{tick}"
     print(f"\n--- Supervisor invocation: {run_label} ---")

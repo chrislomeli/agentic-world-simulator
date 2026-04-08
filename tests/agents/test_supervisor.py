@@ -1,12 +1,10 @@
-"""Tests for ogar.agents.supervisor — state reducers, node functions, routing."""
+"""Tests for ogar.agents.supervisor — state reducers, node functions, routing, graph."""
 
 from langgraph.store.memory import InMemoryStore
 
-from agents.supervisor.state import (
-    aggregate_findings_reducer,
-)
 from langchain_core.messages import AIMessage
 
+from agents.supervisor.state import aggregate_findings_reducer
 from agents.supervisor.graph import (
     fan_out_to_clusters,
     run_cluster_agent,
@@ -161,16 +159,14 @@ class TestSupervisorGraph:
         assert graph is not None
         assert hasattr(graph, "invoke")
         node_names = set(graph.get_graph().nodes.keys())
-        # fan_out_to_clusters is a conditional edge routing function, not a node
+        # fan_out_to_clusters is a conditional edge, not a node
         assert "fan_out_to_clusters" not in node_names
         assert "run_cluster_agent" in node_names
         assert "assess_situation" in node_names
         assert "decide_actions" in node_names
         assert "dispatch_commands" in node_names
-        assert "hitl_pause" not in node_names
 
     def test_invoke_stub(self):
-        # Full graph invocation — verifies the fan-out wiring works end-to-end
         graph = build_supervisor_graph()
         result = graph.invoke({
             "active_cluster_ids": ["cluster-north", "cluster-south"],
@@ -202,7 +198,6 @@ class TestSupervisorGraph:
 
     def test_invoke_with_store_reads_past_incidents(self):
         store = InMemoryStore()
-        # Seed a past incident in the store
         store.put(("incidents", "cluster-north"), "past-f1", {
             "finding_id": "past-f1",
             "cluster_id": "cluster-north",
@@ -220,8 +215,6 @@ class TestSupervisorGraph:
             "situation_summary": None,
             "status": "idle",
         })
-        # Summary should mention past incidents — exact count may vary since
-        # the supervisor's internal cluster agent invocations also write to the store
         assert "past incident" in result["situation_summary"]
         assert "0 past incident" not in result["situation_summary"]
 

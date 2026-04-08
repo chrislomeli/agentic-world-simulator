@@ -5,25 +5,23 @@ State schema for the supervisor agent LangGraph graph.
 
 What is the supervisor?
 ────────────────────────
-The supervisor is the top-level agent.  It:
-  1. Receives findings from cluster agents (via Send API fan-out).
-  2. Correlates findings across clusters.
-  3. Decides which actuator commands to issue.
-  4. Dispatches commands to actuators (including async notifications).
+The supervisor owns the complete analysis workflow for a batch of
+triggered locations:
 
-State design
-────────────
-The supervisor state is the "outer" state.
-When the supervisor invokes cluster agent subgraphs via Send API,
-each cluster agent has its own internal ClusterAgentState.
-The supervisor maps results from ClusterAgentState back into
-SupervisorState after each cluster agent finishes.
+  1. Receives a batch of events grouped by cluster/location.
+  2. Fans out to cluster agents via the Send API (parallel analysis).
+  3. Waits for ALL cluster agents to complete (synchronization barrier).
+  4. Correlates findings across clusters (is this one fire or many?).
+  5. Decides which actuator commands to issue.
+  6. Dispatches commands to actuators.
 
-The key LangGraph pattern here is the Send API:
-  - supervisor creates one Send() per cluster for fan-out
-  - each Send() passes a ClusterAgentState-shaped dict to the subgraph
-  - results come back as a list and get merged into SupervisorState
-    via the aggregate_findings_reducer
+The Send API pattern
+────────────────────
+fan_out_to_clusters returns a list of Send() objects — one per cluster.
+LangGraph runs all cluster agents in parallel and waits for all to
+complete before advancing to assess_situation.  This is the
+synchronization barrier — the supervisor needs the complete picture
+before correlating.
 
 Reducers
 ────────
@@ -36,7 +34,7 @@ messages: Standard add_messages from LangGraph — appends, never overwrites.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
@@ -44,7 +42,6 @@ from typing_extensions import TypedDict
 
 from actuators.base import ActuatorCommand
 from agents.cluster.state import AnomalyFinding
-from transport.schemas import SensorEvent
 
 # ── Custom reducer for aggregating cluster findings ───────────────────────────
 
@@ -62,7 +59,6 @@ def aggregate_findings_reducer(
     Deduplication by finding_id prevents double-counting if a cluster
     agent is somehow invoked twice for the same event.
     """
-    # Build a set of already-seen finding IDs to prevent duplicates.
     existing_ids = {f["finding_id"] for f in existing}
     new_findings = [f for f in incoming if f["finding_id"] not in existing_ids]
     return existing + new_findings
@@ -72,47 +68,43 @@ def aggregate_findings_reducer(
 
 class SupervisorState(TypedDict):
     """
-    The working state for a single supervisor agent execution.
+    The working state for a single supervisor graph execution.
 
-    One supervisor execution is triggered each time a significant
-    cluster finding warrants cross-cluster correlation and action.
+    One execution is triggered each time the event loop (or orchestrator)
+    delivers a batch of events from triggered locations.
     """
 
-    # ── Trigger context ───────────────────────────────────────────────
-    # Which clusters have active events that triggered this run.
+    # ── Input ─────────────────────────────────────────────────────────
+    # Which clusters/locations have active events in this batch.
     # The supervisor fans out to ALL of these via Send API.
     active_cluster_ids: list[str]
 
-    # ── Sensor events (input to cluster agents) ───────────────────────
-    # Collected by the bridge consumer and passed to the supervisor.
+    # Events grouped by cluster/location.  Passed in by the caller
+    # (event loop's on_batch or supervisor_runner).
     # fan_out_to_clusters reads this to populate each cluster agent's
-    # sensor_events before invoking it.  Keyed by cluster_id.
-    events_by_cluster: dict[str, list[SensorEvent]]
+    # sensor_events before invoking it.
+    events_by_cluster: dict[str, list[Any]]
 
-    # ── Aggregated findings ───────────────────────────────────────────
+    # ── Aggregated findings (output of cluster agent fan-out) ─────────
     # Populated by cluster agents via Send API fan-out.
-    # aggregate_findings_reducer merges results from each cluster.
+    # aggregate_findings_reducer merges results from each cluster agent
+    # after the synchronization barrier.
     cluster_findings: Annotated[list[AnomalyFinding], aggregate_findings_reducer]
 
     # ── LLM reasoning ────────────────────────────────────────────────
-    # The supervisor's own tool loop for cross-cluster correlation.
     messages: Annotated[list[BaseMessage], add_messages]
 
     # ── Decision output ───────────────────────────────────────────────
-    # Commands the supervisor decides to issue after assessing findings.
-    # Set by decide_actions node, consumed by dispatch_commands node.
     pending_commands: list[ActuatorCommand]
 
     # ── Situation summary ─────────────────────────────────────────────
-    # Human-readable summary of what the supervisor determined.
-    # Written by assess_situation, used in notifications and audit log.
     situation_summary: str | None
 
     # ── Control ───────────────────────────────────────────────────────
     status: Literal[
         "idle",
-        "aggregating",      # Waiting for cluster agents to report in
-        "assessing",        # LLM correlating cross-cluster findings
+        "aggregating",      # Waiting for cluster agents (Send API fan-out)
+        "assessing",        # Correlating cross-cluster findings
         "deciding",         # Choosing actions
         "dispatching",      # Sending commands to actuators
         "complete",

@@ -5,9 +5,8 @@ LangGraph agent graphs.
 
   - cluster/    — ClusterAgent: processes sensor events for one
                   geographic cluster, detects anomalies.
-  - supervisor/ — SupervisorAgent: fans out to cluster agents
-                  via LangGraph's Send API, aggregates findings,
-                  decides actions, gates through HITL approval.
+  - supervisor/ — SupervisorAgent: fans out to cluster agents via
+                  Send API, correlates findings, decides actions.
 """
 
 from agents.cluster import AnomalyFinding as AnomalyFinding

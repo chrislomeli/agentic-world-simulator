@@ -1,10 +1,10 @@
 """
 ogar.agents.supervisor
 
-Supervisor agent graph — the top-level orchestrator.
+Supervisor agent graph — owns the complete analysis workflow.
 
 Uses LangGraph's Send API to fan out to cluster agents, then
-aggregates findings and decides on actions.
+correlates findings and decides on actions.
 
   - state.py  — SupervisorState TypedDict with aggregate reducer.
   - graph.py  — The StateGraph with Send-based fan-out pattern.
