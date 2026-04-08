@@ -1,13 +1,10 @@
 """Tests for event_loop.loop — EventLoop orchestration."""
 
-import asyncio
 import pytest
 
 from event_loop.loop import EventLoop, EventLoopConfig
 from event_loop.sensor_filter import SensorFilter
-from event_loop.sensor_generator import SensorGenerator
 from event_loop.store import InMemoryLocationStore
-
 
 # ── Test doubles ──────────────────────────────────────────────────────────────
 
@@ -23,15 +20,15 @@ class NeverTriggerFilter(SensorFilter):
         return False, "never triggers"
 
 
-# ── Tests ─────────────────────────────────────────────────────────────────────
+# ── SIMULATION mode tests ────────────────────────────────────────────────────
 
 class TestEventLoopSimulation:
     def _make_config(self, cycles: int = 3, locations=None) -> EventLoopConfig:
         return EventLoopConfig(
+            mode="SIMULATION",
             location_ids=locations or ["loc-A", "loc-B"],
             cycle_speed_seconds=0.0,
-            simulation_cycles=cycles,
-            mode="SIMULATION",
+            max_cycles=cycles,
         )
 
     @pytest.mark.asyncio
@@ -60,7 +57,7 @@ class TestEventLoopSimulation:
             on_batch=batches.append,
         )
         await loop.run()
-        assert len(batches) == 3  # one batch per cycle (all locations trigger)
+        assert len(batches) == 3
 
     @pytest.mark.asyncio
     async def test_on_batch_not_called_when_no_trigger(self):
@@ -89,8 +86,6 @@ class TestEventLoopSimulation:
         assert "active_cluster_ids" in batch
         assert "events_by_cluster" in batch
         assert set(batch["active_cluster_ids"]) == {"loc-A", "loc-B"}
-        assert "loc-A" in batch["events_by_cluster"]
-        assert "loc-B" in batch["events_by_cluster"]
 
     @pytest.mark.asyncio
     async def test_batch_events_are_lists_of_dicts(self):
@@ -116,17 +111,129 @@ class TestEventLoopSimulation:
         loop = EventLoop(config, store=store, sensor_filter=NeverTriggerFilter())
         await loop.run()
         history = store.get_recent_events("loc-A")
-        assert len(history) == 5  # one reading per cycle
+        assert len(history) == 5
+
+    def test_simulation_requires_location_ids(self):
+        config = EventLoopConfig(mode="SIMULATION", location_ids=None)
+        with pytest.raises(ValueError, match="SIMULATION mode requires"):
+            EventLoop(config)
 
 
-class TestEventLoopKafkaStub:
+# ── PIPELINE mode tests ──────────────────────────────────────────────────────
+
+class TestEventLoopPipeline:
+    """Tests for PIPELINE mode — event loop reads from a pre-populated store."""
+
     @pytest.mark.asyncio
-    async def test_kafka_mode_raises(self):
+    async def test_reads_from_store(self):
+        store = InMemoryLocationStore()
+        store.set("cluster-north", {
+            "location_id": "cluster-north",
+            "temperature_c": 45.0,
+            "humidity_pct": 10.0,
+        })
+        batches = []
         config = EventLoopConfig(
-            location_ids=["loc-A"],
-            mode="KAFKA",
-            simulation_cycles=1,
+            mode="PIPELINE",
+            cycle_speed_seconds=0.0,
+            max_cycles=1,
         )
-        loop = EventLoop(config)
-        with pytest.raises(NotImplementedError):
-            await loop.run()
+        loop = EventLoop(
+            config,
+            store=store,
+            sensor_filter=AlwaysTriggerFilter(),
+            on_batch=batches.append,
+        )
+        await loop.run()
+        assert len(batches) == 1
+        assert "cluster-north" in batches[0]["active_cluster_ids"]
+
+    @pytest.mark.asyncio
+    async def test_no_locations_skips_gracefully(self):
+        store = InMemoryLocationStore()  # empty
+        batches = []
+        config = EventLoopConfig(
+            mode="PIPELINE",
+            cycle_speed_seconds=0.0,
+            max_cycles=3,
+        )
+        loop = EventLoop(
+            config,
+            store=store,
+            sensor_filter=AlwaysTriggerFilter(),
+            on_batch=batches.append,
+        )
+        await loop.run()
+        assert len(batches) == 0
+        assert loop.cycles_completed == 3
+
+    @pytest.mark.asyncio
+    async def test_discovers_locations_dynamically(self):
+        """Store gets populated between cycles — event loop discovers new locations."""
+        store = InMemoryLocationStore()
+        batches = []
+
+        def on_batch(batch):
+            batches.append(batch)
+
+        config = EventLoopConfig(
+            mode="PIPELINE",
+            cycle_speed_seconds=0.0,
+            max_cycles=3,
+        )
+        loop = EventLoop(
+            config,
+            store=store,
+            sensor_filter=AlwaysTriggerFilter(),
+            on_batch=on_batch,
+        )
+
+        # Pre-populate before running
+        store.set("cluster-north", {
+            "location_id": "cluster-north",
+            "temperature_c": 40.0,
+        })
+        await loop.run()
+        # At least one batch should have cluster-north
+        assert any("cluster-north" in b["active_cluster_ids"] for b in batches)
+
+    @pytest.mark.asyncio
+    async def test_pipeline_does_not_generate_data(self):
+        store = InMemoryLocationStore()
+        config = EventLoopConfig(
+            mode="PIPELINE",
+            cycle_speed_seconds=0.0,
+            max_cycles=3,
+        )
+        loop = EventLoop(
+            config,
+            store=store,
+            sensor_filter=NeverTriggerFilter(),
+        )
+        await loop.run()
+        # Store should still be empty — pipeline mode doesn't generate
+        assert store.get_all_location_ids() == []
+
+    @pytest.mark.asyncio
+    async def test_explicit_location_ids_in_pipeline_mode(self):
+        """Pipeline mode with explicit location_ids only checks those."""
+        store = InMemoryLocationStore()
+        store.set("cluster-north", {"location_id": "cluster-north", "temperature_c": 40.0})
+        store.set("cluster-south", {"location_id": "cluster-south", "temperature_c": 40.0})
+
+        batches = []
+        config = EventLoopConfig(
+            mode="PIPELINE",
+            location_ids=["cluster-north"],  # only check north
+            cycle_speed_seconds=0.0,
+            max_cycles=1,
+        )
+        loop = EventLoop(
+            config,
+            store=store,
+            sensor_filter=AlwaysTriggerFilter(),
+            on_batch=batches.append,
+        )
+        await loop.run()
+        assert len(batches) == 1
+        assert batches[0]["active_cluster_ids"] == ["cluster-north"]

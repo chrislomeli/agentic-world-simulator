@@ -23,10 +23,10 @@ from __future__ import annotations
 
 from bridge.pipeline_runner import PipelineRunner
 from domains.wildfire.sampler import sample_local_conditions
+from event_loop.store import LocationStateStore
 from transport.schemas import SensorEvent
 from world.generic_engine import GenericWorldEngine
 from world.sensor_inventory import SensorInventory
-
 
 # ─── Factory ──────────────────────────────────────────────────────────────────
 
@@ -34,6 +34,7 @@ def build_pipeline(
     engine: GenericWorldEngine,
     sensor_inventory: SensorInventory,
     *,
+    store: LocationStateStore | None = None,
     queue_maxsize: int = 500,
 ) -> PipelineRunner:
     """
@@ -43,16 +44,20 @@ def build_pipeline(
     ──────────
     engine            : The world engine (provides grid state + tick).
     sensor_inventory  : Sensors to poll each tick.
+    store             : LocationStateStore the consumer writes into.
+                        If None, PipelineRunner creates an internal one.
     queue_maxsize     : Max events buffered before back-pressure.
 
     Returns
     ───────
-    PipelineRunner — call start() to begin, drain_batch() to pull events.
+    PipelineRunner — call start() to begin.  The consumer writes
+    aggregated location state into the store.
     """
     return PipelineRunner(
         engine,
         sensor_inventory,
         sampler=sample_local_conditions,
+        store=store,
         queue_maxsize=queue_maxsize,
     )
 

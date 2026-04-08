@@ -40,6 +40,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from bridge.consumer import EventBridgeConsumer
+from event_loop.store import InMemoryLocationStore, LocationStateStore
 from sensors.publisher import SensorPublisher
 from transport.queue import SensorEventQueue
 from transport.schemas import SensorEvent
@@ -61,11 +62,12 @@ class PipelineRunner:
     Encapsulates:
       - SensorEventQueue (the in-memory transport)
       - SensorPublisher (produces sensor events from the world engine)
-      - EventBridgeConsumer (groups events by cluster)
+      - EventBridgeConsumer (aggregates events into LocationStateStore)
 
     Exposes:
       - start() / stop() — async lifecycle management
-      - drain_batch() — pull accumulated events for supervisor invocation
+      - drain_batch() — pull raw accumulated events (backward compat)
+      - store — the LocationStateStore the consumer writes into
       - ticks_completed — how many world ticks the publisher has processed
       - is_running — whether the pipeline tasks are active
     """
@@ -76,11 +78,13 @@ class PipelineRunner:
         sensor_inventory: SensorInventory,
         *,
         sampler: SamplerFn,
+        store: LocationStateStore | None = None,
         queue_maxsize: int = 500,
     ) -> None:
         self._engine = engine
         self._sensor_inventory = sensor_inventory
         self._sampler = sampler
+        self._store = store or InMemoryLocationStore()
         self._queue_maxsize = queue_maxsize
 
         # Built during start()
@@ -120,7 +124,7 @@ class PipelineRunner:
             sampler=self._sampler,
         )
 
-        self._consumer = EventBridgeConsumer(queue=self._queue)
+        self._consumer = EventBridgeConsumer(queue=self._queue, store=self._store)
 
         self._pub_task = asyncio.create_task(
             self._publisher.run(ticks=num_ticks),
@@ -202,6 +206,13 @@ class PipelineRunner:
         if self._consumer is None:
             return {}
         return self._consumer.drain_batch()
+
+    # ── Store access ─────────────────────────────────────────────────────────
+
+    @property
+    def store(self) -> LocationStateStore:
+        """The LocationStateStore the consumer writes into."""
+        return self._store
 
     # ── Observability ──────────────────────────────────────────────────────────
 

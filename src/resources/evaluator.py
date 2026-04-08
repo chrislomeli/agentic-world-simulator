@@ -307,13 +307,6 @@ def evaluate_preparedness(
     gaps: list[ResourceGap] = []
 
     for req in requirements:
-        # Find available resources of the required type in this cluster
-        typed = [
-            r for r in cluster_resources
-            if r.resource_type == req.resource_type
-            and r.status == ResourceStatus.AVAILABLE
-        ]
-
         # Also consider resources from other clusters that could respond
         # (mobile resources only — they can relocate)
         all_typed = [

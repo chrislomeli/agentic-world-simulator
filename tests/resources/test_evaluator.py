@@ -2,9 +2,8 @@
 
 import math
 
-from resources.base import ResourceBase, ResourceStatus
+from resources.base import ResourceBase
 from resources.evaluator import (
-    DEFAULT_SLA,
     PreparednessConfig,
     PreparednessPosture,
     PreparednessResult,

@@ -1,59 +1,65 @@
 """
 event_loop.loop
 
-The event loop — the orchestration layer between sensor data and the agent pipeline.
+The event loop — the decision layer between the location state store
+and the agent pipeline.
 
 Responsibilities
 ────────────────
-1. Ingest sensor readings (SIMULATION: generated locally, KAFKA: from topic)
-2. Write each reading to the LocationStateStore (one current state per location)
-3. Run each reading through the SensorFilter (deterministic, cheap)
-4. Collect all locations that triggered in this cycle into a single batch
-5. Call on_batch(batch) with the grouped events — the callback decides what
-   to do (invoke cluster agents + supervisor, log, discard, etc.)
+1. Read location state from the LocationStateStore.
+2. Run each location through the SensorFilter (deterministic, cheap).
+3. Collect all locations that triggered in this cycle into a single batch.
+4. Call on_batch(batch) with the grouped events — the callback decides
+   what to do (invoke supervisor graph, log, discard, etc.).
 
 What the event loop does NOT do
 ────────────────────────────────
-- It does not know about LangGraph, agents, or graphs
-- It does not make risk assessments or decisions
-- It does not call LLMs
-- It does not know the difference between a cluster agent and a supervisor
+- It does not ingest raw sensor data (that's the consumer's job).
+- It does not know about LangGraph, agents, or graphs.
+- It does not make risk assessments or decisions.
+- It does not call LLMs.
 
 The on_batch callback is the seam between infrastructure and agents.
-In the tutorial, on_batch invokes cluster agents then the supervisor.
-In production, on_batch might publish to a Kafka topic or call an HTTP endpoint.
-
-Batch shape
-───────────
-The batch passed to on_batch has this shape, which matches the input
-that _run_cluster_agents() in supervisor_runner.py expects:
-
-    {
-        "active_cluster_ids": ["loc-A", "loc-B"],
-        "events_by_cluster": {
-            "loc-A": [list of recent state dicts from store],
-            "loc-B": [list of recent state dicts from store]
-        }
-    }
 
 Modes
 ─────
-  SIMULATION — generates fake sensor data via SensorGenerator, runs for
-               config.simulation_cycles cycles (or forever if None).
+  PIPELINE   — reads from a store that the pipeline consumer populates.
+               This is the production path: world engine → sensors →
+               queue → consumer → store → event loop → supervisor.
 
-  KAFKA      — stub only.  Shows where a Kafka consumer would plug in.
-               The rest of the loop logic is identical in both modes.
+  SIMULATION — generates fake sensor data via SensorGenerator AND reads
+               from the store.  Self-contained, no external pipeline needed.
+               Useful for standalone testing and tutorials.
+
+Batch shape
+───────────
+The batch passed to on_batch:
+    {
+        "active_cluster_ids": ["cluster-north", "cluster-south"],
+        "events_by_cluster": {
+            "cluster-north": [list of recent state dicts from store],
+            "cluster-south": [list of recent state dicts from store]
+        }
+    }
 
 Usage
 ─────
-  config = EventLoopConfig(
-      location_ids=["loc-A", "loc-B", "loc-C"],
-      cycle_speed_seconds=1.0,
-      simulation_cycles=20,
-      mode="SIMULATION",
+  # Pipeline mode — reads from store populated by the consumer:
+  loop = EventLoop(
+      config=EventLoopConfig(mode="PIPELINE"),
+      store=shared_store,
+      on_batch=invoke_supervisor,
   )
+  await loop.run()
 
-  loop = EventLoop(config, on_batch=my_handler)
+  # Simulation mode — self-contained:
+  loop = EventLoop(
+      config=EventLoopConfig(
+          mode="SIMULATION",
+          location_ids=["loc-A", "loc-B"],
+      ),
+      on_batch=invoke_supervisor,
+  )
   await loop.run()
 """
 
@@ -62,7 +68,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Literal
 
 from event_loop.sensor_filter import SensorFilter, ThresholdSensorFilter
@@ -81,17 +87,19 @@ class EventLoopConfig:
 
     Parameters
     ──────────
+    mode                : "PIPELINE" (reads from store) or "SIMULATION"
+                          (generates data + reads from store).
     location_ids        : Sensor locations to monitor.
-    cycle_speed_seconds : Seconds to sleep between cycles.  0.0 = as fast as possible.
-    simulation_cycles   : How many cycles to run in SIMULATION mode.
-                          None means run until cancelled.
-    mode                : "SIMULATION" (fake data) or "KAFKA" (stub).
-    history_window      : How many recent events to pass per location in the batch.
+                          Required for SIMULATION.  Optional for PIPELINE
+                          (defaults to store.get_all_location_ids()).
+    cycle_speed_seconds : Seconds between filter/batch cycles.
+    max_cycles          : How many cycles to run.  None = run until cancelled.
+    history_window      : How many recent events to pass per location.
     """
-    location_ids:        list[str]
+    mode:                Literal["PIPELINE", "SIMULATION"] = "SIMULATION"
+    location_ids:        list[str] | None = None
     cycle_speed_seconds: float = 1.0
-    simulation_cycles:   int | None = 20
-    mode:                Literal["SIMULATION", "KAFKA"] = "SIMULATION"
+    max_cycles:          int | None = 20
     history_window:      int = 10
 
 
@@ -99,17 +107,18 @@ class EventLoopConfig:
 
 class EventLoop:
     """
-    Orchestrates sensor ingestion, filtering, batching, and agent handoff.
+    Polls the LocationStateStore, filters, batches, and hands off to agents.
 
     Parameters
     ──────────
     config           : EventLoopConfig controlling runtime behaviour.
-    store            : LocationStateStore instance.  Defaults to InMemoryLocationStore.
+    store            : LocationStateStore instance.  In PIPELINE mode this is
+                       the same store the consumer writes into.
     sensor_filter    : SensorFilter instance.  Defaults to ThresholdSensorFilter.
-    sensor_generator : SensorGenerator for SIMULATION mode.  Auto-created if None.
+    sensor_generator : SensorGenerator for SIMULATION mode.  Auto-created if
+                       None and mode is SIMULATION.
     on_batch         : Callable invoked when one or more locations trigger.
                        Signature: on_batch(batch: dict) -> None.
-                       If None, logs the batch and does nothing (useful for testing).
     """
 
     def __init__(
@@ -127,7 +136,12 @@ class EventLoop:
         self._on_batch = on_batch or _log_batch
         self._cycles_completed = 0
 
+        # Generator only used in SIMULATION mode
         if config.mode == "SIMULATION":
+            if config.location_ids is None:
+                raise ValueError(
+                    "SIMULATION mode requires location_ids in EventLoopConfig"
+                )
             self._generator = sensor_generator or SensorGenerator(
                 location_ids=config.location_ids
             )
@@ -137,7 +151,7 @@ class EventLoop:
         logger.info(
             "EventLoop initialized — mode=%s  locations=%s  cycle=%.1fs",
             config.mode,
-            config.location_ids,
+            config.location_ids or "(from store)",
             config.cycle_speed_seconds,
         )
 
@@ -148,27 +162,21 @@ class EventLoop:
         """Number of full cycles completed since run() was called."""
         return self._cycles_completed
 
+    @property
+    def store(self) -> LocationStateStore:
+        """The LocationStateStore this event loop reads from."""
+        return self._store
+
     async def run(self) -> None:
         """
-        Run the event loop until the cycle limit is reached or the task
-        is cancelled.
-
-        In SIMULATION mode: generates readings, applies filter, batches, calls on_batch.
-        In KAFKA mode: stub only — shows where the consumer would plug in.
+        Run the event loop until the cycle limit is reached or cancelled.
         """
-        if self._config.mode == "KAFKA":
-            await self._run_kafka()
-        else:
-            await self._run_simulation()
-
-    # ── Simulation mode ───────────────────────────────────────────────────────
-
-    async def _run_simulation(self) -> None:
-        max_cycles = self._config.simulation_cycles
+        max_cycles = self._config.max_cycles
         cycle = 0
 
         logger.info(
-            "EventLoop SIMULATION starting — %s cycle(s)",
+            "EventLoop %s starting — %s cycle(s)",
+            self._config.mode,
             max_cycles if max_cycles is not None else "∞",
         )
 
@@ -176,27 +184,39 @@ class EventLoop:
             cycle += 1
             logger.info("── Cycle %d ──────────────────────────────────────", cycle)
 
-            triggered: dict[str, str] = {}  # location_id → trigger reason
+            # ── Step 1: Generate data (SIMULATION only) ──────────────
+            if self._generator is not None:
+                for location_id in self._config.location_ids:
+                    reading = self._generator.generate(location_id)
+                    self._store.set(location_id, reading)
+                    logger.debug(
+                        "  [%s] generated: temp=%.1f°C  hum=%.1f%%",
+                        location_id,
+                        reading.get("temperature_c", 0),
+                        reading.get("humidity_pct", 0),
+                    )
 
-            # ── Step 1: Generate and store readings ───────────────────
-            for location_id in self._config.location_ids:
-                reading = self._generator.generate(location_id)
-                self._store.set(location_id, reading)
-                logger.debug(
-                    "  [%s] updated: temp=%.1f°C  hum=%.1f%%  "
-                    "wind=%.1f m/s  fuel=%.1f%%",
-                    location_id,
-                    reading["temperature_c"],
-                    reading["humidity_pct"],
-                    reading["wind_speed_mps"],
-                    reading["fuel_moisture_pct"],
-                )
+            # ── Step 2: Determine which locations to check ───────────
+            location_ids = (
+                self._config.location_ids
+                or self._store.get_all_location_ids()
+            )
 
-            # ── Step 2: Filter — decide which locations triggered ─────
-            for location_id in self._config.location_ids:
+            if not location_ids:
+                logger.debug("  No locations in store yet — waiting.")
+                self._cycles_completed = cycle
+                if self._config.cycle_speed_seconds > 0:
+                    await asyncio.sleep(self._config.cycle_speed_seconds)
+                continue
+
+            # ── Step 3: Filter — decide which locations triggered ────
+            triggered: dict[str, str] = {}
+            for location_id in location_ids:
                 recent = self._store.get_recent_events(
                     location_id, n=self._config.history_window
                 )
+                if not recent:
+                    continue
                 did_trigger, reason = self._filter.should_trigger(recent)
                 if did_trigger:
                     triggered[location_id] = reason
@@ -204,7 +224,7 @@ class EventLoop:
                 else:
                     logger.debug("  ok         [%s]  %s", location_id, reason)
 
-            # ── Step 3: Build batch and hand off ─────────────────────
+            # ── Step 4: Build batch and hand off ─────────────────────
             if triggered:
                 batch = self._build_batch(triggered)
                 logger.info(
@@ -222,51 +242,8 @@ class EventLoop:
                 await asyncio.sleep(self._config.cycle_speed_seconds)
 
         logger.info(
-            "EventLoop SIMULATION complete — %d cycle(s) run.",
+            "EventLoop complete — %d cycle(s) run.",
             self._cycles_completed,
-        )
-
-    # ── Kafka mode (stub) ─────────────────────────────────────────────────────
-
-    async def _run_kafka(self) -> None:
-        """
-        Kafka consumer stub — shows where the real consumer would plug in.
-
-        In production, replace this body with:
-
-            consumer = AIOKafkaConsumer(
-                "sensor-readings",
-                bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
-                group_id="event-loop",
-                value_deserializer=lambda m: json.loads(m.decode()),
-            )
-            await consumer.start()
-            try:
-                async for msg in consumer:
-                    reading = msg.value
-                    location_id = reading["location_id"]
-                    self._store.set(location_id, reading)
-                    recent = self._store.get_recent_events(location_id)
-                    did_trigger, reason = self._filter.should_trigger(recent)
-                    if did_trigger:
-                        batch = self._build_batch({location_id: reason})
-                        self._on_batch(batch)
-            finally:
-                await consumer.stop()
-
-        Note: in a real Kafka setup you would likely accumulate triggered
-        locations within a time window and flush as a single batch, rather
-        than calling on_batch per message.  The batching strategy depends
-        on your latency requirements.
-        """
-        logger.warning(
-            "EventLoop KAFKA mode is a stub — no Kafka connection configured. "
-            "See the docstring for the upgrade path."
-        )
-        # TODO: implement Kafka consumer (see docstring above)
-        raise NotImplementedError(
-            "KAFKA mode is not yet implemented.  "
-            "Use SIMULATION mode for the tutorial."
         )
 
     # ── Batch builder ─────────────────────────────────────────────────────────
@@ -276,20 +253,16 @@ class EventLoop:
         triggered: dict[str, str],
     ) -> dict[str, Any]:
         """
-        Build the batch dict that on_batch will receive.
+        Build the batch dict that on_batch receives.
 
         Shape:
             {
-                "active_cluster_ids": ["loc-A", "loc-B"],
+                "active_cluster_ids": ["cluster-north", ...],
                 "events_by_cluster": {
-                    "loc-A": [list of recent state dicts, oldest first],
-                    "loc-B": [list of recent state dicts, oldest first]
+                    "cluster-north": [recent state dicts, oldest first],
+                    ...
                 }
             }
-
-        This is the exact shape expected by _run_cluster_agents() in
-        supervisor_runner.py.  The event loop does not know about that
-        function — the shape is a contract defined by the on_batch caller.
         """
         events_by_cluster: dict[str, list[dict]] = {}
         for location_id in triggered:
@@ -306,15 +279,7 @@ class EventLoop:
 # ── Default on_batch handler ──────────────────────────────────────────────────
 
 def _log_batch(batch: dict[str, Any]) -> None:
-    """
-    Default on_batch handler — logs the batch and does nothing.
-
-    Replace by passing your own on_batch to EventLoop:
-
-        loop = EventLoop(config, on_batch=my_agent_handler)
-
-    where my_agent_handler runs cluster agents then the supervisor.
-    """
+    """Default on_batch handler — logs the batch and does nothing."""
     logger.info(
         "would invoke supervisor graph with batch: active=%s  "
         "events=%s",

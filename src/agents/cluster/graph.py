@@ -80,6 +80,17 @@ After your analysis, respond with a JSON object (and nothing else):
 # LangGraph merges the partial update into the current state using reducers.
 # Nodes should only return the fields they actually changed.
 
+def _trigger_id(trigger) -> str:
+    """Extract an identifier from a trigger event (SensorEvent or dict)."""
+    if trigger is None:
+        return "unknown"
+    if hasattr(trigger, "source_id"):
+        return trigger.source_id
+    if isinstance(trigger, dict):
+        return trigger.get("source_id", trigger.get("location_id", "unknown"))
+    return "unknown"
+
+
 def ingest_events(state: ClusterAgentState) -> dict:
     """
     First node — acknowledges the trigger event and sets status to processing.
@@ -95,7 +106,7 @@ def ingest_events(state: ClusterAgentState) -> dict:
     logger.info(
         "ClusterAgent[%s] ingesting event from source=%s",
         state.get("cluster_id"),
-        trigger.source_id if trigger else "unknown",
+        _trigger_id(trigger),
     )
 
     # Return only the fields we're changing.
@@ -121,15 +132,22 @@ def classify(state: ClusterAgentState) -> dict:
         cluster_id,
     )
 
+    trigger_id = _trigger_id(trigger)
+    event_id = (
+        trigger.event_id if hasattr(trigger, "event_id")
+        else trigger.get("event_id") if isinstance(trigger, dict)
+        else None
+    )
+
     stub_finding: AnomalyFinding = {
         "finding_id": str(uuid4()),
         "cluster_id": cluster_id,
         "anomaly_type": "stub_placeholder",
-        "affected_sensors": [trigger.source_id] if trigger else [],
+        "affected_sensors": [trigger_id] if trigger else [],
         "confidence": 0.5,
         "summary": f"[STUB] classify node not yet implemented for cluster {cluster_id}",
         "raw_context": {
-            "trigger_event_id": trigger.event_id if trigger else None,
+            "trigger_event_id": event_id,
             "event_count_in_window": len(state.get("sensor_events", [])),
         },
     }

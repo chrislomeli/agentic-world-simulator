@@ -1,73 +1,118 @@
 """
 ogar.bridge.consumer
 
-Async event bridge consumer — reads SensorEvents from a queue
-and groups them by cluster for the supervisor to process.
+Async event bridge consumer — reads SensorEvents from the queue and
+writes aggregated location state into a LocationStateStore.
 
 Responsibility
 ──────────────
-The consumer sits between the transport queue and the supervisor.
-It collects sensor events as they arrive and groups them by cluster_id.
-The supervisor then fans out to cluster agents with these grouped events.
+The consumer sits between the transport queue and the location state
+store.  Its job is:
+  1. Pull SensorEvents from the queue as they arrive.
+  2. Map each event's payload fields into a composite location state dict.
+  3. Write the updated state to the LocationStateStore.
 
-This is Option B architecture: the supervisor owns agent orchestration.
-The consumer's only job is to drain the queue and group events — it does
-NOT invoke cluster agents directly.
+The store is the seam between the data pipeline and the event loop.
+The event loop reads from the store, filters, and invokes the supervisor.
+The consumer never touches agents, graphs, or LLMs.
 
-Why async?
-──────────
-The publisher (world engine ticking + sensor emission) is async.
-Running the consumer as an async loop lets it drain the queue while
-the publisher is still producing events.
+Aggregation model
+─────────────────
+Multiple sensors contribute to one location's state.  A temperature
+sensor updates `temperature_c`, a humidity sensor updates `humidity_pct`,
+etc.  The consumer does a read-modify-write on the store so that each
+sensor reading merges into the existing composite state.
+
+The grouping key is `cluster_id` — all sensors in a cluster contribute
+to one location record.  This matches the supervisor's fan-out: one
+cluster agent per cluster_id.
+
+Field mapping
+─────────────
+The consumer uses a pluggable field_mapper function to translate
+SensorEvent payloads into location state fields.  A default mapper
+for wildfire sensors is provided (DEFAULT_FIELD_MAPPER).
 
 Usage
 ─────
-  # Concurrent: publisher and consumer run as parallel async tasks.
-  # The orchestrator periodically pulls batched events for the supervisor.
+  from event_loop.store import InMemoryLocationStore
 
-  consumer = EventBridgeConsumer(queue=queue)
-  pub_task = asyncio.create_task(publisher.run(ticks=20))
+  store = InMemoryLocationStore()
+  consumer = EventBridgeConsumer(queue=queue, store=store)
   con_task = asyncio.create_task(consumer.run())
 
-  # Periodically (or after publisher finishes):
-  batch = consumer.drain_batch()   # pull + reset
-  result = supervisor_graph.invoke({
-      "active_cluster_ids": list(batch.keys()),
-      "events_by_cluster": batch,
-      ...
-  })
-
-  # When done:
-  consumer.stop()
-  await con_task
+  # The event loop reads from the same store:
+  event_loop = EventLoop(config, store=store, on_batch=invoke_supervisor)
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
+from typing import Any
 
+from event_loop.store import LocationStateStore
 from transport.queue import SensorEventQueue
 from transport.schemas import SensorEvent
 
 logger = logging.getLogger(__name__)
 
 
+# ── Default field mapper for wildfire sensors ────────────────────────────────
+
+def _wildfire_field_mapper(event: SensorEvent) -> dict[str, Any]:
+    """
+    Map a wildfire SensorEvent payload into location state fields.
+
+    Each sensor type contributes specific fields to the composite
+    location state.  Unknown sensor types are silently ignored —
+    they still get stored as raw events but don't update named fields.
+    """
+    fields: dict[str, Any] = {}
+    p = event.payload
+
+    if event.source_type == "temperature":
+        fields["temperature_c"] = p.get("celsius", 0.0)
+    elif event.source_type == "humidity":
+        fields["humidity_pct"] = p.get("relative_humidity_pct", 100.0)
+    elif event.source_type == "wind":
+        fields["wind_speed_mps"] = p.get("speed_mps", 0.0)
+        fields["wind_direction_deg"] = p.get("direction_deg", 0.0)
+    elif event.source_type == "smoke":
+        fields["smoke_pm25"] = p.get("pm25_ugm3", 0.0)
+    elif event.source_type == "barometric_pressure":
+        fields["pressure_hpa"] = p.get("pressure_hpa", 1013.0)
+
+    return fields
+
+
+DEFAULT_FIELD_MAPPER = _wildfire_field_mapper
+
+
 class EventBridgeConsumer:
     """
-    Async consumer that collects SensorEvents grouped by cluster.
-
-    Drains the queue and accumulates events into events_by_cluster.
-    The supervisor reads events_by_cluster to populate cluster agents
-    via the Send API fan-out.
+    Async consumer that reads SensorEvents and writes composite
+    location state into a LocationStateStore.
 
     Parameters
     ──────────
-    queue : The SensorEventQueue to consume from.
+    queue        : The SensorEventQueue to consume from.
+    store        : LocationStateStore to write aggregated state into.
+    field_mapper : Callable that maps a SensorEvent → dict of location
+                   state fields to merge.  Defaults to the wildfire mapper.
     """
 
-    def __init__(self, *, queue: SensorEventQueue) -> None:
+    def __init__(
+        self,
+        *,
+        queue: SensorEventQueue,
+        store: LocationStateStore,
+        field_mapper: Callable[[SensorEvent], dict[str, Any]] = DEFAULT_FIELD_MAPPER,
+    ) -> None:
         self._queue = queue
+        self._store = store
+        self._field_mapper = field_mapper
         self.events_by_cluster: dict[str, list[SensorEvent]] = {}
         self.events_consumed: int = 0
         self._stop_requested: bool = False
@@ -126,27 +171,56 @@ class EventBridgeConsumer:
                 event.sim_tick,
             )
 
+            # ── Aggregate into location state store ──────────────────
+            self._merge_into_store(event)
+
+            # ── Also keep raw events for backward compat / inspection ─
             if cluster_id not in self.events_by_cluster:
                 self.events_by_cluster[cluster_id] = []
             self.events_by_cluster[cluster_id].append(event)
 
             self._queue.task_done()
 
+    # ── Store aggregation ──────────────────────────────────────────────────────
+
+    def _merge_into_store(self, event: SensorEvent) -> None:
+        """
+        Read-modify-write: merge a sensor event's fields into the
+        composite location state for its cluster.
+
+        If the location has no prior state, a new record is created
+        with safe defaults.  The field_mapper decides which fields
+        the event contributes.
+        """
+        location_id = event.cluster_id
+        existing = self._store.get(location_id)
+        current = dict(existing) if existing else {"location_id": location_id}
+        current["location_id"] = location_id
+
+        # Merge sensor-specific fields
+        mapped = self._field_mapper(event)
+        current.update(mapped)
+
+        # Track the latest tick for freshness
+        current["sim_tick"] = event.sim_tick
+        current["timestamp"] = event.timestamp.isoformat()
+
+        self._store.set(location_id, current)
+
+    # ── Batch interface (backward compat) ────────────────────────────────────
+
     def drain_batch(self) -> dict[str, list[SensorEvent]]:
         """
-        Pull the current batch of grouped events and reset the buffer.
+        Pull the current batch of raw events and reset the buffer.
 
-        This is the interface between the async consumer and the sync
-        supervisor.  The orchestrator calls this periodically to get
-        accumulated events, then passes them to supervisor_graph.invoke().
+        This is the legacy interface for code that works with raw
+        SensorEvents directly (e.g. supervisor_runner.py).  New code
+        should read from the LocationStateStore instead.
 
         Returns
         ───────
         dict mapping cluster_id → list of SensorEvents accumulated since
         the last drain.  The internal buffer is cleared after this call.
-
-        Thread-safety: called from the same asyncio loop as run(), so
-        no lock is needed.  If you move to threads, add a Lock.
         """
         batch = self.events_by_cluster
         self.events_by_cluster = {}
