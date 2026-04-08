@@ -27,13 +27,17 @@ Neither side knows about the other — the store is the contract.
 import asyncio
 
 from examples.config_builder import configure_environment
+from examples.event_loop_builder import (
+    build_event_loop,
+    make_supervisor_callback,
+    run_pipeline_with_event_loop,
+)
 from examples.pipeline_builder import build_pipeline
 from langgraph.store.memory import InMemoryStore
 
 from agents.supervisor.graph import build_supervisor_graph
 from domains.wildfire.scenario_loader import load_scenario_from_json
-from event_loop.loop import EventLoop, EventLoopConfig
-from event_loop.sensor_filter import ScoringFilter, score_location
+from event_loop.sensor_filter import score_location
 from event_loop.store import InMemoryLocationStore
 from resources import evaluate_preparedness, severity_from_score
 from resources.inventory import ResourceInventory
@@ -198,79 +202,21 @@ async def main():
     #
     # The event loop polls the store, checks for triggered locations,
     # and invokes the supervisor when risk conditions are met.
+    #
+    # make_supervisor_callback() returns a closure that captures the graph
+    # and the results accumulator.  The EventLoop never sees the graph —
+    # it just calls on_batch(batch).
     supervisor_results: list[tuple[int, dict]] = []
-
-    def on_batch(batch: dict) -> None:
-        """Callback: event loop triggers this when locations are flagged."""
-        tick = pipeline.ticks_completed
-        print(f"\n--- Event loop trigger at tick {tick} ---")
-        for cid, events in batch["events_by_cluster"].items():
-            print(f"  {cid}: {len(events)} recent state(s)")
-
-        result = supervisor_graph.invoke(
-            {
-                "active_cluster_ids": batch["active_cluster_ids"],
-                "events_by_cluster": batch["events_by_cluster"],
-                "cluster_findings": [],
-                "messages": [],
-                "pending_commands": [],
-                "situation_summary": None,
-                "status": "idle",
-                "error_message": None,
-            },
-            config={"run_name": f"supervisor-tick-{tick}"},
-        )
-        supervisor_results.append((tick, result))
-
-    event_loop = EventLoop(
-        EventLoopConfig(
-            mode="PIPELINE",
-            cycle_speed_seconds=0.1,
-            max_cycles=None,  # runs until cancelled
-        ),
-        store=location_store,
-        sensor_filter=ScoringFilter(),
-        on_batch=on_batch,
-    )
+    on_batch = make_supervisor_callback(supervisor_graph, supervisor_results)
+    event_loop = build_event_loop(location_store, on_batch)
 
     # ── STEP 7: Run pipeline and event loop concurrently ─────────────────────
     #
     # The pipeline produces data.  The event loop consumes it.
     # They share the location_store — that's the only coupling.
-    num_ticks = 20
-
-    async def run_pipeline():
-        await pipeline.start(num_ticks=num_ticks, tick_interval=0.0)
-        while pipeline.is_running:
-            await asyncio.sleep(0.05)
-        await pipeline.stop()
-
-    async def run_event_loop():
-        await asyncio.sleep(0.05)  # let the pipeline start producing
-        try:
-            await event_loop.run()
-        except asyncio.CancelledError:
-            pass
-
-    # Run both — cancel the event loop when the pipeline finishes
-    event_loop_task = asyncio.create_task(run_event_loop())
-    await run_pipeline()
-    event_loop_task.cancel()
-    try:
-        await event_loop_task
-    except asyncio.CancelledError:
-        pass
-
-    # ── Final pass: ensure the event loop processes the completed store ───
-    # The pipeline may finish before the event loop gets a chance to check.
-    # Run one synchronous filter pass to catch anything the loop missed.
-    final_loop = EventLoop(
-        EventLoopConfig(mode="PIPELINE", cycle_speed_seconds=0.0, max_cycles=1),
-        store=location_store,
-        sensor_filter=ScoringFilter(),
-        on_batch=on_batch,
-    )
-    await final_loop.run()
+    # run_pipeline_with_event_loop handles lifecycle, cancellation,
+    # and a final drain pass.
+    await run_pipeline_with_event_loop(pipeline, event_loop, num_ticks=20)
 
     supervisor_result = supervisor_results[-1][1] if supervisor_results else {}
 

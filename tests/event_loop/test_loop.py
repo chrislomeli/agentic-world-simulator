@@ -83,6 +83,8 @@ class TestEventLoopSimulation:
         await loop.run()
         assert len(batches) == 1
         batch = batches[0]
+        assert "cycle" in batch
+        assert batch["cycle"] == 1
         assert "active_cluster_ids" in batch
         assert "events_by_cluster" in batch
         assert set(batch["active_cluster_ids"]) == {"loc-A", "loc-B"}

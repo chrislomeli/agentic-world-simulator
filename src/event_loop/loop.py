@@ -167,6 +167,11 @@ class EventLoop:
         """The LocationStateStore this event loop reads from."""
         return self._store
 
+    @property
+    def on_batch(self) -> Callable[[dict[str, Any]], None]:
+        """The on_batch callback this event loop invokes."""
+        return self._on_batch
+
     async def run(self) -> None:
         """
         Run the event loop until the cycle limit is reached or cancelled.
@@ -226,7 +231,7 @@ class EventLoop:
 
             # ── Step 4: Build batch and hand off ─────────────────────
             if triggered:
-                batch = self._build_batch(triggered)
+                batch = self._build_batch(triggered, cycle)
                 logger.info(
                     "  Batch ready — %d location(s) triggered: %s",
                     len(triggered),
@@ -251,12 +256,14 @@ class EventLoop:
     def _build_batch(
         self,
         triggered: dict[str, str],
+        cycle: int,
     ) -> dict[str, Any]:
         """
         Build the batch dict that on_batch receives.
 
         Shape:
             {
+                "cycle": 7,
                 "active_cluster_ids": ["cluster-north", ...],
                 "events_by_cluster": {
                     "cluster-north": [recent state dicts, oldest first],
@@ -271,6 +278,7 @@ class EventLoop:
             )
 
         return {
+            "cycle": cycle,
             "active_cluster_ids": list(triggered.keys()),
             "events_by_cluster": events_by_cluster,
         }
