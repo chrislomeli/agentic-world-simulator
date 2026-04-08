@@ -1,8 +1,43 @@
-# Episode 3, Session 15: Evaluation — Preparedness Assessment Quality
+# Session 10: Evaluation — Preparedness Assessment Quality
 
-> **What we're building:** An evaluation framework that measures the quality of the supervisor's preparedness assessments — not whether it predicted fires, but whether it correctly identified gaps and recommended appropriate responses.
-> **Why we need it:** Sessions 12–14 built and stress-tested the supervisor. This session evaluates it. The question is: "Did the agent correctly identify fire potential, assess resource readiness, and recommend appropriate responses?"
-> **What you'll have at the end:** A complete evaluation framework for preparedness-based agents that measures gap detection accuracy, recommendation quality, and degradation sensitivity — demonstrating that preparedness assessment is evaluable and useful even when prediction is impossible.
+---
+
+## What you're doing and why
+
+Session 9 ran the system under degraded conditions and observed the output. This session measures it.
+
+The evaluation framework answers: did the supervisor correctly identify resource gaps, and did it recommend commands that address those gaps? You compare the supervisor's assessment against ground truth from `readiness_summary()` — not against fire prediction, which would be unevaluable without a real ML model.
+
+This gives you a concrete score you can use to compare stub mode vs. LLM mode, and to track whether changes to the agent improve or regress assessment quality.
+
+---
+
+## Setup
+
+This session builds on Session 9. If you're continuing, activate your environment and move on.
+
+If you're starting fresh:
+
+```bash
+uv venv && source .venv/bin/activate
+uv pip install -e ".[llm]" --group dev
+git remote add tutorial https://github.com/chrislomeli/agentic-world-simulator.git
+git fetch tutorial
+git checkout tutorial/main -- src/ tests/
+pytest tests/ -q   # everything should pass before you start
+```
+
+---
+
+## Rubric coverage
+
+This session exercises the full system and demonstrates evaluability of preparedness-based agents. No new LangGraph patterns — the focus is evaluation methodology.
+
+---
+
+## What you're building
+
+No new source files. The `PreparednessEvaluator` class in this session is a self-contained evaluation script.
 
 ---
 
@@ -500,6 +535,15 @@ At this point you have a complete, runnable testbed:
 - Ground truth comparison
 
 This is a production-ready agentic monitoring system with full evaluation capabilities.
+
+---
+
+## Checkpoint
+
+Run the `PreparednessEvaluator` script. Verify:
+- Stub mode: baseline scores 1.0, degraded scenarios score 0.0 for gap detection (expected — stub can't query resources)
+- LLM mode: all scenarios score 1.0 for gap detection and recommendation quality
+- The score difference between stub and LLM mode is the concrete demonstration of why the LLM matters
 
 ---
 

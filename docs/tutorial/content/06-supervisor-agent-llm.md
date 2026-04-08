@@ -1,8 +1,61 @@
-# Episode 3, Session 10: The Supervisor Agent (LLM Mode)
+# Session 6: The Supervisor Agent (LLM Mode)
 
-> **What we're building:** LLM-powered assess and decide loops that replace the stub supervisor nodes — the LLM examines findings, correlates across clusters, and produces reasoned actuator commands.
-> **Why we need it:** Session 09 proved the multi-agent coordination works with stubs. This session adds the LLM to make the supervisor actually reason. The graph topology changes to add two separate ReAct loops (assess and decide), but the Send API fan-out and the reducer stay exactly the same.
-> **What you'll have at the end:** A supervisor that uses an LLM to assess cross-cluster situations and decide what actions to take — the first AI-driven decision-making at the coordination layer.
+---
+
+## What you're doing and why
+
+Session 5 proved the multi-agent coordination works: fan-out, parallel execution, reducer, stub assess, stub decide. Now you add the LLM — but with a twist. The supervisor has two distinct reasoning tasks that need *separate* loops:
+
+1. **Assess** — examine findings across all clusters, look for correlations, produce a situation summary
+2. **Decide** — based on the assessment, choose what actuator commands to issue
+
+These are separate because they have different inputs, different tools, and different outputs. A single ReAct loop trying to do both tends to collapse the two phases together and produce worse decisions than two focused loops.
+
+The Send API fan-out and the `aggregate_findings_reducer` stay exactly the same as Session 5.
+
+---
+
+## Setup
+
+This session builds on Session 5. If you're continuing, activate your environment and move on.
+
+If you're starting fresh:
+
+```bash
+uv venv && source .venv/bin/activate
+uv pip install -e ".[llm]" --group dev
+git remote add tutorial https://github.com/chrislomeli/agentic-world-simulator.git
+git fetch tutorial
+git checkout tutorial/main -- src/world/ src/domains/ src/sensors/ src/transport/ src/bridge/ src/resources/ src/config.py tests/
+git checkout tutorial/main -- src/agents/ src/tools/sensor_tools.py
+pytest tests/agents/test_supervisor.py -q   # should pass before you start
+```
+
+---
+
+## Rubric coverage
+
+| Skill | Level | Where in this session |
+|-------|-------|-----------------------|
+| Cycles / loops | mid-level | Two independent ReAct loops: assess and decide |
+| Tool definition — @tool decorator | foundational | `supervisor_tools.py` — 4 tools for cross-cluster analysis |
+| ToolNode + bind_tools | foundational | `ToolNode(all_tools)` for both assess and decide phases |
+| Structured output tools | mid-level | `_parse_assessment` and `_parse_commands` extract JSON from LLM responses |
+
+---
+
+## What you're building
+
+| File | Change | What it contains |
+|------|--------|-----------------|
+| `src/tools/supervisor_tools.py` | **Create** | 4 `@tool` functions for cross-cluster finding analysis: `get_all_findings`, `get_findings_by_cluster`, `get_finding_summary`, `check_cross_cluster` |
+| `src/agents/supervisor/graph.py` | **Modify** | Add LLM mode: `_make_assess_llm_node`, `_make_decide_llm_node`, `route_after_assess_llm`, `route_after_decide_llm`, `_parse_assessment`, `_parse_commands` |
+
+When you're done:
+
+```bash
+pytest tests/agents/test_supervisor.py tests/tools/ -v
+```
 
 ---
 
@@ -588,6 +641,19 @@ The supervisor is the decision-maker. Cluster agents report findings. The superv
 
 ---
 
+## Checkpoint
+
+```bash
+pytest tests/agents/test_supervisor.py tests/tools/ -v
+```
+
+Key tests to look for:
+- `test_supervisor_tools` — all 4 tools return correct data shapes
+- `test_invoke_llm_mode` — supervisor runs with a mock LLM
+- `test_invoke_with_store_reads_past_incidents` — Store is read correctly during assess
+
+---
+
 ## Key files
 
 - `src/agents/supervisor/graph.py` — `_make_assess_llm_node`, `_make_decide_llm_node`, `route_after_assess_llm`, `route_after_decide_llm`, `_parse_assessment`, `_parse_commands`
@@ -596,4 +662,4 @@ The supervisor is the decision-maker. Cluster agents report findings. The superv
 
 ---
 
-*Next: Session 11 introduces resources — preparedness assets on the grid. Resources are queryable world state (firetrucks, hospitals, helicopters) that the supervisor can examine to assess readiness. Resource tools will be added to the supervisor's tool set so the LLM can answer "are we prepared for this situation?"*
+*Next: Session 7 introduces resource tools — preparedness assets on the grid. Resources are queryable world state (firetrucks, hospitals, helicopters) that the supervisor can examine to assess readiness. Resource tools will be added to the supervisor's tool set so the LLM can answer "are we prepared for this situation?"*

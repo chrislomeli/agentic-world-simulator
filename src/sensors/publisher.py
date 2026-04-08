@@ -43,7 +43,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Any
 
 from sensors.base import SensorBase
 from transport.queue import SensorEventQueue
@@ -51,6 +52,9 @@ from transport.queue import SensorEventQueue
 if TYPE_CHECKING:
     from world.generic_engine import GenericWorldEngine
     from world.sensor_inventory import SensorInventory
+
+# Type for sampler functions: (engine, grid_row, grid_col) -> dict
+SamplerFn = Callable[..., dict[str, Any]]
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +80,7 @@ class SensorPublisher:
         queue: SensorEventQueue,
         tick_interval_seconds: float = 1.0,
         engine: GenericWorldEngine | None = None,
+        sampler: SamplerFn | None = None,
     ) -> None:
         """
         Parameters
@@ -96,6 +101,11 @@ class SensorPublisher:
                                 the publisher calls engine.tick() once before
                                 each sensor pass, advancing the simulation
                                 so sensors read fresh world state.
+        sampler               : Optional function (engine, grid_row, grid_col) -> dict.
+                                When provided, the publisher calls this for each
+                                sensor to produce local_conditions, which are
+                                passed to sensor.emit().  This is how sensors
+                                receive world state without holding an engine reference.
         """
         if inventory is None and sensors is None:
             raise ValueError("Provide either sensors or inventory")
@@ -104,6 +114,7 @@ class SensorPublisher:
         self._queue = queue
         self._tick_interval = tick_interval_seconds
         self._engine = engine
+        self._sampler = sampler
 
         # Total ticks completed since run() was last called.
         # Useful for scenario scripts that want to know how far we are.
@@ -176,7 +187,15 @@ class SensorPublisher:
                 else self._sensors
             )
             for sensor in active_sensors:
-                event = sensor.emit()
+                # Sample local conditions if a sampler and engine are available
+                local_conditions = None
+                if self._sampler is not None and self._engine is not None:
+                    if sensor.grid_row is not None and sensor.grid_col is not None:
+                        local_conditions = self._sampler(
+                            self._engine, sensor.grid_row, sensor.grid_col,
+                        )
+
+                event = sensor.emit(local_conditions)
 
                 if event is None:
                     # Sensor is in DROPOUT mode — silence is intentional,

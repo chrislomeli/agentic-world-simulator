@@ -1,8 +1,43 @@
-# Episode 3, Session 14: Scenario Knobs — Resilience Testing
+# Session 9: Scenario Knobs — Resilience Testing
 
-> **What we're building:** Controlled experiments that degrade sensors and resources to test how the supervisor's preparedness assessment changes under stress.
-> **Why we need it:** Session 13 proved the pipeline works. This session stress-tests it. The question isn't "did the agent predict the fire?" — it's "did the agent correctly identify gaps in preparedness and recommend appropriate responses?"
-> **What you'll have at the end:** A resilience testing framework that compares supervisor assessments across baseline, degraded sensors, degraded resources, and combined degradation scenarios — demonstrating that preparedness assessment is robust and useful even when prediction is impossible.
+---
+
+## What you're doing and why
+
+Session 8 proved the complete pipeline works under normal conditions. This session breaks it on purpose.
+
+You'll run the same pipeline four times with the same random seed (same fire conditions) but different degradation settings — fewer sensors, disabled resources — and compare the supervisor's assessments. The goal isn't to see if the agent predicts fires. It's to see if it correctly identifies *gaps*: "cluster-south is missing water suppression capacity."
+
+This framing matters. An agent that says "fire potential is high given current conditions" is always defensible. An agent that says "cluster-south has 0 engines available" is stating a verifiable fact. The evaluation in Session 10 measures both.
+
+---
+
+## Setup
+
+This session builds on Session 8. If you're continuing, activate your environment and move on.
+
+If you're starting fresh:
+
+```bash
+uv venv && source .venv/bin/activate
+uv pip install -e ".[llm]" --group dev
+git remote add tutorial https://github.com/chrislomeli/agentic-world-simulator.git
+git fetch tutorial
+git checkout tutorial/main -- src/ tests/
+pytest tests/ -q   # everything should pass before you start
+```
+
+---
+
+## Rubric coverage
+
+This session exercises the system rather than introducing new LangGraph patterns. The resilience testing pattern itself — controlled degradation + comparison — is the skill.
+
+---
+
+## What you're building
+
+No new source files. This session uses the scenario knobs already built into `ResourceInventory` and `SensorInventory`.
 
 ---
 
@@ -338,6 +373,17 @@ The supervisor's preparedness assessment changes appropriately as conditions deg
 
 ---
 
+## Checkpoint
+
+Run the experiment matrix script from this session. Verify:
+- Baseline: no gaps detected, no commands issued
+- 50% engines disabled: gap appears in ground truth; LLM mode should detect it in the assessment
+- All engines disabled: critical gap; LLM mode should escalate
+
+In stub mode, the supervisor won't detect resource gaps (expected — no LLM to query resources). That's the motivation for Session 10's evaluation framework.
+
+---
+
 ## Key files
 
 - `src/resources/inventory.py` — `reduce_resources()`, `disable_resources()`, `reset_all()`
@@ -346,4 +392,4 @@ The supervisor's preparedness assessment changes appropriately as conditions deg
 
 ---
 
-*Next: Session 15 evaluates the quality of preparedness assessments across scenarios. The question is: "Did the supervisor correctly identify gaps and recommend appropriate responses?" This is the evaluation framework for preparedness-based agents.*
+*Next: Session 10 evaluates the quality of preparedness assessments across scenarios. The question is: "Did the supervisor correctly identify gaps and recommend appropriate responses?" This is the evaluation framework for preparedness-based agents.*

@@ -1,8 +1,61 @@
-# Episode 3, Session 9: The Supervisor Agent (Stub Mode)
+# Session 5: The Supervisor Agent (Stub Mode)
 
-> **What we're building:** A supervisor agent that coordinates multiple cluster agents using the Send API, aggregates their findings, and produces action decisions.
-> **Why we need it:** Sessions 06–08 built cluster agents that work independently. This session adds the supervisor layer — the agent that sees the big picture across all clusters, correlates findings, and decides what actions to take. This is the multi-agent coordination pattern.
-> **What you'll have at the end:** A supervisor graph that fans out to N cluster agents in parallel, merges their findings with a custom reducer, and produces a situation summary — all with deterministic stub logic before adding the LLM in Session 10.
+---
+
+## What you're doing and why
+
+Sessions 2–3 built the cluster agent — a graph that classifies sensor events for one geographic cluster. The cluster agent is a specialist: it only knows its own sensors. It has no idea what's happening in other clusters.
+
+This session adds the supervisor: the agent that sees across all clusters. It coordinates cluster agents using the Send API (dynamic fan-out), merges their findings with a custom reducer, and produces action decisions.
+
+As in Session 2, you build in stub mode first. The stub supervisor proves the multi-agent structure works before adding LLM reasoning in Session 6.
+
+**Key concept:** the cluster agent is a *subgraph*. The supervisor invokes it as a black box inside a node — `cluster_agent_graph.invoke(state)` — the same as any Python function call. See `docs/tutorial/assets/diag-05-supervisor-to-subgraph.md` for a visual.
+
+---
+
+## Setup
+
+This session builds on Sessions 1–4. If you're continuing, activate your environment and move on.
+
+If you're starting fresh:
+
+```bash
+uv venv && source .venv/bin/activate
+uv pip install -e ".[llm]" --group dev
+git remote add tutorial https://github.com/chrislomeli/agentic-world-simulator.git
+git fetch tutorial
+git checkout tutorial/main -- src/world/ src/domains/ src/sensors/ src/transport/ src/bridge/ src/resources/ src/config.py tests/
+git checkout tutorial/main -- src/agents/cluster/ src/tools/
+pytest tests/agents/test_cluster.py -q   # should pass before you start
+```
+
+---
+
+## Rubric coverage
+
+| Skill | Level | Where in this session |
+|-------|-------|-----------------------|
+| Parallel node execution (Send API) | mid-level | `fan_out_to_clusters` returns `List[Send]` — one per cluster |
+| Subgraphs — compile and invoke | mid-level | `cluster_agent_graph.invoke(state)` inside `run_cluster_agent` node |
+| State schema handoff between graphs | mid-level | Supervisor constructs `ClusterAgentState` dict, maps `anomalies` → `cluster_findings` |
+| Reducers and Annotated state | mid-level | `aggregate_findings_reducer` merges parallel results |
+| Supervisor pattern | mid-level | The whole graph — fan-out, aggregate, assess, decide, dispatch |
+
+---
+
+## What you're building
+
+| File | Change | What it contains |
+|------|--------|-----------------|
+| `src/agents/supervisor/state.py` | **Create** | `SupervisorState` TypedDict, `aggregate_findings_reducer` |
+| `src/agents/supervisor/graph.py` | **Create** | `fan_out_to_clusters`, `run_cluster_agent`, stub nodes, `build_supervisor_graph` |
+
+When you're done:
+
+```bash
+pytest tests/agents/test_supervisor.py -v
+```
 
 ---
 
@@ -319,6 +372,20 @@ The supervisor doesn't replace cluster agents. It coordinates them. Cluster agen
 
 ---
 
+## Checkpoint
+
+```bash
+pytest tests/agents/test_supervisor.py -v
+```
+
+Key tests to look for:
+- `test_fan_out_to_clusters` — Send API produces the right number of parallel invocations
+- `test_aggregate_findings_reducer` — deduplication works correctly
+- `test_invoke_stub_mode` — full graph runs to completion with stub nodes
+- `test_invoke_with_store_writes_situation` — dispatch_commands writes to the Store
+
+---
+
 ## Key files
 
 - `src/agents/supervisor/state.py` — `SupervisorState` TypedDict, `aggregate_findings_reducer`
@@ -327,4 +394,4 @@ The supervisor doesn't replace cluster agents. It coordinates them. Cluster agen
 
 ---
 
-*Next: Session 10 replaces the stub assess and decide nodes with LLM-powered ReAct loops. The supervisor will use tools to examine findings, correlate across clusters, and produce reasoned actuator commands. The graph topology changes to add two separate tool loops (assess and decide), but the Send API fan-out and the reducer stay exactly the same.*
+*Next: Session 6 replaces the stub assess and decide nodes with LLM-powered ReAct loops. The supervisor will use tools to examine findings, correlate across clusters, and produce reasoned actuator commands. The graph topology changes to add two separate tool loops (assess and decide), but the Send API fan-out and the reducer stay exactly the same.*

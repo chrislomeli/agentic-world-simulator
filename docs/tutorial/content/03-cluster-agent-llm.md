@@ -1,8 +1,58 @@
-# Episode 2, Session 7: The Agent Graph (LLM Mode)
+# Session 3: The Cluster Agent (LLM Mode)
 
-> **What we're building:** An LLM-powered ReAct loop that replaces the stub classify node — the LLM calls tools to inspect sensor data, reasons about anomalies, and produces findings.
-> **Why we need it:** Session 06 proved the graph structure works with deterministic stubs. This session adds the LLM and tools to make the agent actually reason. The graph topology changes to add a cycle (the ReAct loop), but the state schema and the other two nodes stay exactly the same.
-> **What you'll have at the end:** A cluster agent that uses an LLM to classify sensor readings into anomaly findings based on actual analysis, not hardcoded logic — the first real AI reasoning in the system.
+---
+
+## What you're doing and why
+
+Session 2 proved the graph structure works: state flows through nodes, reducers accumulate events, the stub classify node produces `AnomalyFinding` objects. Now you add the LLM.
+
+The graph topology changes in one place: the stub `classify` node is replaced by an LLM + ToolNode ReAct loop. Everything else — `ingest_events`, `report_findings`, the state schema, the reducers — stays exactly the same. That's the point: once you have a working graph structure, swapping the reasoning engine is just swapping one node.
+
+The LLM doesn't receive raw sensor events as text. Instead it calls tools to query the data. This session introduces that pattern.
+
+---
+
+## Setup
+
+This session builds on Session 2. If you're continuing, activate your environment and move on.
+
+If you're starting fresh:
+
+```bash
+uv venv && source .venv/bin/activate
+uv pip install -e ".[llm]" --group dev
+git remote add tutorial https://github.com/chrislomeli/agentic-world-simulator.git
+git fetch tutorial
+git checkout tutorial/main -- src/world/ src/domains/ src/sensors/ src/transport/ src/bridge/ src/resources/ src/config.py tests/
+git checkout tutorial/main -- src/agents/cluster/state.py src/agents/cluster/graph.py
+pytest tests/agents/test_cluster.py -q   # should pass before you start
+```
+
+---
+
+## Rubric coverage
+
+| Skill | Level | Where in this session |
+|-------|-------|-----------------------|
+| Tool definition — @tool decorator | foundational | `sensor_tools.py` — 4 tools with docstrings + type hints |
+| ToolNode + bind_tools | foundational | `llm.bind_tools(SENSOR_TOOLS)`, `ToolNode(SENSOR_TOOLS)` in `graph.py` |
+| Cycles / loops | mid-level | `tool_node → classify` back-edge creates the ReAct loop |
+| Dynamic branching | mid-level | `route_after_classify_llm` — checks `tool_calls` to decide loop or exit |
+
+---
+
+## What you're building
+
+| File | Change | What it contains |
+|------|--------|-----------------|
+| `src/tools/sensor_tools.py` | **Create** | 4 `@tool` functions the LLM calls to inspect sensor data; module-level state holder |
+| `src/agents/cluster/graph.py` | **Modify** | Add LLM mode branch: `_make_classify_llm_node`, `_parse_llm_findings`, `route_after_classify_llm`, `tool_node` |
+
+When you're done:
+
+```bash
+pytest tests/agents/test_cluster.py tests/tools/ -v
+```
 
 ---
 
@@ -435,6 +485,19 @@ The graph structure from Session 06 (state schema, node signatures, partial upda
 
 ---
 
+## Checkpoint
+
+```bash
+pytest tests/agents/test_cluster.py tests/tools/ -v
+```
+
+All tests should pass. Key ones to look for:
+- `test_invoke_stub_mode` — graph runs without LLM
+- `test_invoke_llm_mode` — graph runs with a mock LLM
+- `test_sensor_tools` — tools return correct data shapes
+
+---
+
 ## Key files
 
 - `src/tools/sensor_tools.py` — 4 `@tool` functions: `get_recent_readings`, `get_sensor_summary`, `check_threshold`, `get_cluster_status`; module-level state holder
@@ -442,4 +505,4 @@ The graph structure from Session 06 (state schema, node signatures, partial upda
 
 ---
 
-*Next: Session 08 wires the full sensor → agent pipeline end-to-end. The world ticks, sensors emit events, the publisher puts them on a queue, the consumer batches them and invokes the cluster agent (LLM mode), and findings flow out. First complete loop from simulation to AI reasoning.*
+*Next: Session 4 wires the full sensor → agent pipeline end-to-end. The world ticks, sensors emit events, the publisher puts them on a queue, the consumer batches them and invokes the cluster agent (LLM mode), and findings flow out. First complete loop from simulation to AI reasoning.*

@@ -1,8 +1,46 @@
-# Episode 3, Session 13: Full Pipeline — Everything Wired
+# Session 8: Full Pipeline — Everything Wired
 
-> **What we're building:** The complete end-to-end pipeline with all systems active — world engine, sensors, queue, cluster agents, supervisor, resources, and full LangSmith observability.
-> **Why we need it:** Sessions 03–12 built each component in isolation. This session wires them all together into one complete simulation run. You'll see the full data flow from world state to agent decisions.
-> **What you'll have at the end:** A runnable system that simulates fire spread, emits sensor readings, routes them to cluster agents, aggregates findings at the supervisor, assesses preparedness, and produces action commands — the complete agentic monitoring pipeline.
+---
+
+## What you're doing and why
+
+Sessions 1–7 built every component: world engine, sensors, transport, cluster agents, supervisor, resources. Each piece works in isolation. This session wires them all together and runs the complete system for the first time.
+
+This is the integration test for the whole tutorial. It proves the interfaces work end-to-end and gives you a baseline you can break in Session 9.
+
+You also add full LangSmith observability here so you can see exactly what the LLM did during each supervisor invocation — which tools it called, what data it saw, why it made the decisions it made.
+
+---
+
+## Setup
+
+This session builds on Sessions 1–7. If you're continuing, activate your environment and move on.
+
+If you're starting fresh:
+
+```bash
+uv venv && source .venv/bin/activate
+uv pip install -e ".[llm]" --group dev
+git remote add tutorial https://github.com/chrislomeli/agentic-world-simulator.git
+git fetch tutorial
+git checkout tutorial/main -- src/ tests/
+pytest tests/ -q   # everything should pass before you start
+```
+
+---
+
+## Rubric coverage
+
+| Skill | Level | Where in this session |
+|-------|-------|-----------------------|
+| Compile + invoke / stream | foundational | Both `.invoke()` (supervisor) and `async .run()` (publisher/consumer) |
+| LangSmith tracing | mid-level | `LANGCHAIN_TRACING_V2` enables full pipeline traces |
+
+---
+
+## What you're building
+
+No new source files. This session is integration: running all components together and adding observability configuration.
 
 ---
 
@@ -371,9 +409,20 @@ The pipeline is complete. All systems work together. The next sessions will stre
 
 ---
 
+## Checkpoint
+
+Run the complete pipeline script from this session and verify the output matches the expected output above (stub mode).
+
+Key things to verify:
+- Events enqueued equals `sensors × ticks`
+- Findings are produced (at least 1 per cluster)
+- Supervisor status reaches `complete`
+- Resource readiness shows all resources available
+
+---
+
 ## Key files
 
-- `examples/pipeline_demo_annotated.py` — complete reference implementation with detailed comments
 - `src/sensors/publisher.py` — `SensorPublisher.run()` async loop
 - `src/bridge/consumer.py` — `EventBridgeConsumer.run()` async loop
 - `src/agents/cluster/graph.py` — cluster agent graph
@@ -381,4 +430,4 @@ The pipeline is complete. All systems work together. The next sessions will stre
 
 ---
 
-*Next: Session 14 uses scenario knobs to degrade sensors and resources, testing how the supervisor's preparedness assessment changes under stress. The question isn't "did it predict correctly?" but "did it identify the right gaps and recommend appropriate responses?"*
+*Next: Session 9 uses scenario knobs to degrade sensors and resources, testing how the supervisor's preparedness assessment changes under stress. The question isn't "did it predict correctly?" but "did it identify the right gaps and recommend appropriate responses?"*

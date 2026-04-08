@@ -5,9 +5,7 @@ import asyncio
 import pytest
 
 from bridge.consumer import EventBridgeConsumer
-from agents.cluster.graph import build_cluster_agent_graph
-from transport import SensorEventQueue
-from transport import SensorEvent
+from transport import SensorEventQueue, SensorEvent
 
 
 def _make_event(source_id: str = "s1", cluster_id: str = "cluster-north") -> SensorEvent:
@@ -24,86 +22,40 @@ def queue():
     return SensorEventQueue(maxsize=100)
 
 
-@pytest.fixture
-def cluster_graph():
-    return build_cluster_agent_graph()
-
-
 class TestEventBridgeConsumer:
     @pytest.mark.asyncio
-    async def test_consume_single_event(self, queue, cluster_graph):
+    async def test_consume_single_event(self, queue):
         await queue.put(_make_event())
-        consumer = EventBridgeConsumer(
-            queue=queue, agent_graph=cluster_graph, batch_size=1,
-        )
+        consumer = EventBridgeConsumer(queue=queue)
         await consumer.run(max_events=1)
         assert consumer.events_consumed == 1
-        assert consumer.invocations == 1
-        assert len(consumer.collected_findings) >= 1
+        assert "cluster-north" in consumer.events_by_cluster
+        assert len(consumer.events_by_cluster["cluster-north"]) == 1
 
     @pytest.mark.asyncio
-    async def test_batch_accumulates(self, queue, cluster_graph):
-        """Events accumulate until batch_size is reached."""
+    async def test_groups_events_by_cluster(self, queue):
         for i in range(5):
             await queue.put(_make_event(f"s{i}"))
-
-        consumer = EventBridgeConsumer(
-            queue=queue, agent_graph=cluster_graph, batch_size=5,
-        )
+        consumer = EventBridgeConsumer(queue=queue)
         await consumer.run(max_events=5)
         assert consumer.events_consumed == 5
-        assert consumer.invocations == 1
+        assert len(consumer.events_by_cluster["cluster-north"]) == 5
 
     @pytest.mark.asyncio
-    async def test_partial_batch_flushed_on_stop(self, queue, cluster_graph):
-        """Partial batches are flushed when the consumer stops."""
-        for i in range(3):
-            await queue.put(_make_event(f"s{i}"))
-
-        consumer = EventBridgeConsumer(
-            queue=queue, agent_graph=cluster_graph, batch_size=10,
-        )
-        await consumer.run(max_events=3)
-        assert consumer.events_consumed == 3
-        assert consumer.invocations == 1  # partial batch flushed
-
-    @pytest.mark.asyncio
-    async def test_multiple_clusters(self, queue, cluster_graph):
-        """Events from different clusters invoke separate agents."""
+    async def test_multiple_clusters(self, queue):
         await queue.put(_make_event("s1", cluster_id="cluster-north"))
         await queue.put(_make_event("s2", cluster_id="cluster-south"))
-
-        consumer = EventBridgeConsumer(
-            queue=queue, agent_graph=cluster_graph, batch_size=1,
-        )
+        consumer = EventBridgeConsumer(queue=queue)
         await consumer.run(max_events=2)
         assert consumer.events_consumed == 2
-        assert consumer.invocations == 2
-
-        cluster_ids = {f["cluster_id"] for f in consumer.collected_findings}
-        assert "cluster-north" in cluster_ids
-        assert "cluster-south" in cluster_ids
-
-    @pytest.mark.asyncio
-    async def test_on_finding_callback(self, queue, cluster_graph):
-        await queue.put(_make_event())
-        callback_log = []
-
-        consumer = EventBridgeConsumer(
-            queue=queue,
-            agent_graph=cluster_graph,
-            on_finding=lambda f: callback_log.append(f),
-            batch_size=1,
-        )
-        await consumer.run(max_events=1)
-        assert len(callback_log) >= 1
-        assert callback_log[0]["cluster_id"] == "cluster-north"
+        assert "cluster-north" in consumer.events_by_cluster
+        assert "cluster-south" in consumer.events_by_cluster
+        assert len(consumer.events_by_cluster["cluster-north"]) == 1
+        assert len(consumer.events_by_cluster["cluster-south"]) == 1
 
     @pytest.mark.asyncio
-    async def test_stop_terminates(self, queue, cluster_graph):
-        consumer = EventBridgeConsumer(
-            queue=queue, agent_graph=cluster_graph, batch_size=1,
-        )
+    async def test_stop_terminates(self, queue):
+        consumer = EventBridgeConsumer(queue=queue)
 
         async def stop_soon():
             await asyncio.sleep(0.1)
@@ -114,26 +66,21 @@ class TestEventBridgeConsumer:
         # Should return without hanging.
 
     @pytest.mark.asyncio
-    async def test_empty_queue_stop(self, queue, cluster_graph):
-        """Consumer stops gracefully on an empty queue."""
-        consumer = EventBridgeConsumer(
-            queue=queue, agent_graph=cluster_graph, batch_size=1,
-        )
+    async def test_empty_queue_stop(self, queue):
+        consumer = EventBridgeConsumer(queue=queue)
         await consumer.run(max_events=0)
         assert consumer.events_consumed == 0
-        assert consumer.invocations == 0
+        assert consumer.events_by_cluster == {}
 
     @pytest.mark.asyncio
-    async def test_findings_accumulate_across_batches(self, queue, cluster_graph):
-        for i in range(6):
+    async def test_events_preserve_order(self, queue):
+        for i in range(4):
             await queue.put(_make_event(f"s{i}"))
-
-        consumer = EventBridgeConsumer(
-            queue=queue, agent_graph=cluster_graph, batch_size=3,
-        )
-        await consumer.run(max_events=6)
-        assert consumer.invocations == 2
-        assert len(consumer.collected_findings) >= 2
+        consumer = EventBridgeConsumer(queue=queue)
+        await consumer.run(max_events=4)
+        events = consumer.events_by_cluster["cluster-north"]
+        source_ids = [e.source_id for e in events]
+        assert source_ids == ["s0", "s1", "s2", "s3"]
 
 
 class TestPublisherEngineTick:
@@ -157,7 +104,7 @@ class TestPublisherEngineTick:
 
         class _Stub(SensorBase):
             source_type = "stub"
-            def read(self):
+            def read(self, local_conditions=None):
                 return {"v": 1}
 
         q = SensorEventQueue()
@@ -178,7 +125,7 @@ class TestPublisherEngineTick:
 
         class _Stub(SensorBase):
             source_type = "stub"
-            def read(self):
+            def read(self, local_conditions=None):
                 return {"v": 1}
 
         q = SensorEventQueue()

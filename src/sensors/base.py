@@ -176,12 +176,19 @@ class SensorBase(ABC):
         ...
 
     @abstractmethod
-    def read(self) -> dict[str, Any]:
+    def read(self, local_conditions: dict[str, Any] | None = None) -> dict[str, Any]:
         """
         Produce a fresh domain-specific reading.
 
         Returns a plain dict.  The base class wraps this in a SensorEvent
         envelope — the subclass never touches the envelope.
+
+        Parameters
+        ──────────
+        local_conditions : Dict of environmental conditions at this sensor's
+                          grid position, produced by a domain-specific sampler.
+                          When None, the sensor should return a reasonable
+                          default or raise if it requires conditions.
 
         This method should NOT apply failure modes.  That is the base
         class's responsibility in emit().
@@ -235,11 +242,16 @@ class SensorBase(ABC):
 
     # ── Core emit ─────────────────────────────────────────────────────────────
 
-    def emit(self) -> SensorEvent | None:
+    def emit(self, local_conditions: dict[str, Any] | None = None) -> SensorEvent | None:
         """
         Produce a SensorEvent envelope wrapping the current reading.
 
         Returns None if the sensor is in DROPOUT mode (silent sensor).
+
+        Parameters
+        ──────────
+        local_conditions : Dict of environmental conditions at this sensor's
+                          grid position.  Passed through to read().
 
         This is the primary method called by the sensor runner / publisher.
 
@@ -259,12 +271,12 @@ class SensorBase(ABC):
         if self._failure_mode == FailureMode.STUCK:
             if self._stuck_payload is None:
                 # First tick in stuck mode — capture a real reading to freeze
-                self._stuck_payload = self.read()
+                self._stuck_payload = self.read(local_conditions)
             payload = self._stuck_payload
 
         else:
             # NORMAL / DRIFT / SPIKE: get a fresh reading from the subclass
-            payload = self.read()
+            payload = self.read(local_conditions)
             # TODO: apply drift offset and spike injection here in a later
             # iteration once scenario scripts are built out.
 

@@ -137,7 +137,8 @@ def fan_out_to_clusters(state: SupervisorState) -> list[Send]:
     nodes in parallel, then merge their state changes with the parent."
 
     Each Send() targets the "run_cluster_agent" node and passes it
-    a ClusterAgentState-shaped dict as input.
+    a ClusterAgentState-shaped dict as input, including the sensor events
+    collected by the bridge consumer for that cluster.
 
     This is the dynamic fan-out pattern — the number of clusters is
     determined at runtime from state["active_cluster_ids"].
@@ -145,6 +146,7 @@ def fan_out_to_clusters(state: SupervisorState) -> list[Send]:
     If there is 1, only 1 runs.  No code changes.
     """
     cluster_ids = state.get("active_cluster_ids", [])
+    events_by_cluster = state.get("events_by_cluster", {})
     logger.info(
         "Supervisor fanning out to %d cluster(s): %s",
         len(cluster_ids),
@@ -153,13 +155,13 @@ def fan_out_to_clusters(state: SupervisorState) -> list[Send]:
 
     sends = []
     for cluster_id in cluster_ids:
-        # Build a ClusterAgentState-shaped dict to pass to the subgraph.
-        # The subgraph will receive this as its initial state.
+        events = events_by_cluster.get(cluster_id, [])
+        trigger = events[-1] if events else None
         cluster_state: ClusterAgentState = {
             "cluster_id": cluster_id,
             "workflow_id": f"{cluster_id}::supervisor-fanout",
-            "sensor_events": [],       # Subgraph will load from Store (future)
-            "trigger_event": None,     # TODO: pass the actual trigger event
+            "sensor_events": events,
+            "trigger_event": trigger,
             "messages": [],
             "anomalies": [],
             "status": "idle",
@@ -617,10 +619,9 @@ def build_supervisor_graph(
     Store architecture note
     ───────────────────────
     The supervisor does NOT pass the store to its internal cluster agent
-    invocations (run_cluster_agent).  Those run with empty sensor events and
-    exist only for cross-cluster correlation — writing stub findings from
-    them would pollute the store.  Only cluster agents invoked by the bridge
-    consumer (with real sensor data) write to the store.
+    invocations (run_cluster_agent).  Cluster agents write findings to the
+    store via their own report_findings node — the supervisor reads past
+    incidents from the store in assess_situation to build historical context.
     """
     builder = StateGraph(SupervisorState)
 

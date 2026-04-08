@@ -1,11 +1,11 @@
 """
 ogar.domains.wildfire.sensors
 
-Fire-specific sensors that sample from a GenericWorldEngine[FireCellState].
+Fire-specific sensors that produce domain-specific SensorEvent payloads.
 
-These sensors read from the generic engine's grid and environment to
-produce domain-specific SensorEvent payloads.  Each sensor holds a
-reference to the engine and queries it during read().
+These sensors are pure reporting devices.  They receive local_conditions
+(a dict sampled from the engine by the publisher's sampler) and add noise
+to produce a reading.  They do NOT hold a reference to the engine.
 
 The base class (SensorBase) handles wrapping the payload in a
 SensorEvent envelope, applying failure modes, and tracking ticks.
@@ -29,20 +29,16 @@ Sensor types
 
 from __future__ import annotations
 
-import math
 import random
 from typing import Any
 
-from domains.wildfire.cell_state import FireCellState, FireState
-from domains.wildfire.environment import FireEnvironmentState
 from sensors.base import SensorBase
-from world.generic_engine import GenericWorldEngine
 
 # ── Temperature sensor ───────────────────────────────────────────────────────
 
 class TemperatureSensor(SensorBase):
     """
-    Reads ambient temperature + fire radiant heat from nearby cells.
+    Reads ambient temperature + fire radiant heat from local conditions.
 
     Real-world reference:
       RAWS stations report temperature every 10-60 min in °C.
@@ -54,31 +50,19 @@ class TemperatureSensor(SensorBase):
     def __init__(
         self,
         *,
-        engine: GenericWorldEngine[FireCellState],
-        grid_row: int,
-        grid_col: int,
         noise_std: float = 0.5,
         **kwargs,
     ) -> None:
-        super().__init__(grid_row=grid_row, grid_col=grid_col, **kwargs)
-        self._engine = engine
+        super().__init__(**kwargs)
         self._noise_std = noise_std
 
-    def read(self) -> dict[str, Any]:
-        env: FireEnvironmentState = self._engine.environment  # type: ignore[assignment]
-        base_temp = env.temperature_c
+    def read(self, local_conditions: dict[str, Any] | None = None) -> dict[str, Any]:
+        lc = local_conditions or {}
+        base_temp = lc.get("ambient_temperature_c", 25.0)
+        own_fire = lc.get("own_fire_intensity", 0.0)
+        neighbor_heat = lc.get("neighbor_fire_heat", 0.0)
 
-        # Heat from nearby burning cells.
-        heat_boost = 0.0
-        for nr, nc, _nl in self._engine.grid.neighbors(self.grid_row, self.grid_col):
-            neighbor = self._engine.grid.get_cell(nr, nc)
-            if neighbor.cell_state.fire_state == FireState.BURNING:
-                heat_boost += neighbor.cell_state.fire_intensity * 15.0
-
-        own_cell = self._engine.grid.get_cell(self.grid_row, self.grid_col)
-        if own_cell.cell_state.fire_state == FireState.BURNING:
-            heat_boost += own_cell.cell_state.fire_intensity * 40.0
-
+        heat_boost = own_fire * 40.0 + neighbor_heat * 15.0
         noise = random.gauss(0, self._noise_std)
         celsius = base_temp + heat_boost + noise
         return {"celsius": round(celsius, 1), "unit": "C"}
@@ -88,11 +72,7 @@ class TemperatureSensor(SensorBase):
 
 class HumiditySensor(SensorBase):
     """
-    Reads relative humidity from the environment.
-
-    The sensor has a grid location (it's a physical device) but reads
-    global environment humidity — the environment model doesn't have
-    per-cell humidity variation.
+    Reads relative humidity from local conditions.
 
     Real-world reference:
       Standard hygrometers report 0–100% RH.
@@ -104,19 +84,15 @@ class HumiditySensor(SensorBase):
     def __init__(
         self,
         *,
-        engine: GenericWorldEngine[FireCellState],
-        grid_row: int,
-        grid_col: int,
         noise_std: float = 1.0,
         **kwargs,
     ) -> None:
-        super().__init__(grid_row=grid_row, grid_col=grid_col, **kwargs)
-        self._engine = engine
+        super().__init__(**kwargs)
         self._noise_std = noise_std
 
-    def read(self) -> dict[str, Any]:
-        env: FireEnvironmentState = self._engine.environment  # type: ignore[assignment]
-        humidity = env.humidity_pct + random.gauss(0, self._noise_std)
+    def read(self, local_conditions: dict[str, Any] | None = None) -> dict[str, Any]:
+        lc = local_conditions or {}
+        humidity = lc.get("humidity_pct", 50.0) + random.gauss(0, self._noise_std)
         humidity = max(0.0, min(100.0, humidity))
         return {"relative_humidity_pct": round(humidity, 1), "unit": "%"}
 
@@ -125,11 +101,7 @@ class HumiditySensor(SensorBase):
 
 class WindSensor(SensorBase):
     """
-    Reads wind speed and direction from the environment.
-
-    The sensor has a grid location (it's a physical device) but reads
-    global environment wind — the environment model doesn't have
-    per-cell wind variation.
+    Reads wind speed and direction from local conditions.
 
     Real-world reference:
       Anemometers report wind speed (m/s) and direction (°).
@@ -140,22 +112,18 @@ class WindSensor(SensorBase):
     def __init__(
         self,
         *,
-        engine: GenericWorldEngine[FireCellState],
-        grid_row: int,
-        grid_col: int,
         speed_noise_std: float = 0.3,
         direction_noise_std: float = 3.0,
         **kwargs,
     ) -> None:
-        super().__init__(grid_row=grid_row, grid_col=grid_col, **kwargs)
-        self._engine = engine
+        super().__init__(**kwargs)
         self._speed_noise_std = speed_noise_std
         self._direction_noise_std = direction_noise_std
 
-    def read(self) -> dict[str, Any]:
-        env: FireEnvironmentState = self._engine.environment  # type: ignore[assignment]
-        speed = max(0.0, env.wind_speed_mps + random.gauss(0, self._speed_noise_std))
-        direction = (env.wind_direction_deg + random.gauss(0, self._direction_noise_std)) % 360.0
+    def read(self, local_conditions: dict[str, Any] | None = None) -> dict[str, Any]:
+        lc = local_conditions or {}
+        speed = max(0.0, lc.get("wind_speed_mps", 0.0) + random.gauss(0, self._speed_noise_std))
+        direction = (lc.get("wind_direction_deg", 0.0) + random.gauss(0, self._direction_noise_std)) % 360.0
         return {
             "speed_mps": round(speed, 1),
             "direction_deg": round(direction, 1),
@@ -183,39 +151,32 @@ class SmokeSensor(SensorBase):
     def __init__(
         self,
         *,
-        engine: GenericWorldEngine[FireCellState],
-        grid_row: int,
-        grid_col: int,
         noise_std: float = 2.0,
         **kwargs,
     ) -> None:
-        super().__init__(grid_row=grid_row, grid_col=grid_col, **kwargs)
-        self._engine = engine
+        super().__init__(**kwargs)
         self._noise_std = noise_std
 
-    def read(self) -> dict[str, Any]:
-        env: FireEnvironmentState = self._engine.environment  # type: ignore[assignment]
+    def read(self, local_conditions: dict[str, Any] | None = None) -> dict[str, Any]:
+        lc = local_conditions or {}
         baseline_pm25 = 5.0
 
-        wind_row, wind_col = env.wind_vector()
-        wind_speed = env.wind_speed_mps
+        wind_vector = lc.get("wind_vector", (0.0, 0.0))
+        wind_row, wind_col = wind_vector
+        wind_speed = lc.get("wind_speed_mps", 0.0)
+        nearby_fires = lc.get("nearby_fire_cells", [])
 
         total_smoke = 0.0
-        for cell in self._engine.grid.iter_cells():
-            if cell.cell_state.fire_state != FireState.BURNING:
-                continue
-
-            dr = self.grid_row - cell.row
-            dc = self.grid_col - cell.col
-            dist = math.sqrt(dr * dr + dc * dc)
+        for fire in nearby_fires:
+            dist = fire["distance"]
             if dist == 0:
                 dist = 0.5
 
             distance_factor = 1.0 / (1.0 + dist)
 
             if dist > 0:
-                dir_r = dr / dist
-                dir_c = dc / dist
+                dir_r = fire["dr"] / dist
+                dir_c = fire["dc"] / dist
                 dot = wind_row * dir_r + wind_col * dir_c
                 wind_factor = max(0.1, 0.5 + dot * 0.5)
             else:
@@ -223,7 +184,7 @@ class SmokeSensor(SensorBase):
 
             speed_factor = 1.0 + min(wind_speed / 15.0, 1.0)
             contribution = (
-                cell.cell_state.fire_intensity
+                fire["intensity"]
                 * distance_factor * wind_factor * speed_factor * 80.0
             )
             total_smoke += contribution
@@ -236,7 +197,7 @@ class SmokeSensor(SensorBase):
 
 class BarometricSensor(SensorBase):
     """
-    Reads atmospheric pressure from the environment.
+    Reads atmospheric pressure from local conditions.
 
     Real-world reference:
       Standard barometers report in hPa. Normal range: 980–1040 hPa.
@@ -247,19 +208,15 @@ class BarometricSensor(SensorBase):
     def __init__(
         self,
         *,
-        engine: GenericWorldEngine[FireCellState],
-        grid_row: int,
-        grid_col: int,
         noise_std: float = 0.3,
         **kwargs,
     ) -> None:
-        super().__init__(grid_row=grid_row, grid_col=grid_col, **kwargs)
-        self._engine = engine
+        super().__init__(**kwargs)
         self._noise_std = noise_std
 
-    def read(self) -> dict[str, Any]:
-        env: FireEnvironmentState = self._engine.environment  # type: ignore[assignment]
-        pressure = env.pressure_hpa + random.gauss(0, self._noise_std)
+    def read(self, local_conditions: dict[str, Any] | None = None) -> dict[str, Any]:
+        lc = local_conditions or {}
+        pressure = lc.get("pressure_hpa", 1013.0) + random.gauss(0, self._noise_std)
         return {"pressure_hpa": round(pressure, 1), "unit": "hPa"}
 
 
@@ -272,6 +229,9 @@ class ThermalCameraSensor(SensorBase):
     Unlike a point sensor, covers a rectangular area and returns
     a grid of temperature values.  Burning cells appear as hot spots.
 
+    This sensor requires local_conditions to include a `cell_grid`
+    key (produced by sample_thermal_region in the sampler).
+
     Real-world reference:
       FLIR thermal cameras produce pixel grids of temperature.
       Near-flame surface: up to 800°C+.
@@ -282,7 +242,6 @@ class ThermalCameraSensor(SensorBase):
     def __init__(
         self,
         *,
-        engine: GenericWorldEngine[FireCellState],
         top_row: int,
         left_col: int,
         view_rows: int,
@@ -291,29 +250,32 @@ class ThermalCameraSensor(SensorBase):
         **kwargs,
     ) -> None:
         super().__init__(grid_row=top_row, grid_col=left_col, **kwargs)
-        self._engine = engine
         self._top_row = top_row
         self._left_col = left_col
         self._view_rows = view_rows
         self._view_cols = view_cols
         self._noise_std = noise_std
 
-    def read(self) -> dict[str, Any]:
-        env: FireEnvironmentState = self._engine.environment  # type: ignore[assignment]
-        ambient = env.temperature_c
-        heat_grid: list[list[float]] = []
+    def read(self, local_conditions: dict[str, Any] | None = None) -> dict[str, Any]:
+        lc = local_conditions or {}
+        ambient = lc.get("ambient_temperature_c", 25.0)
+        cell_grid = lc.get("cell_grid", [])
 
-        for r in range(self._top_row, self._top_row + self._view_rows):
+        heat_grid: list[list[float]] = []
+        for r_idx, row_data in enumerate(cell_grid):
             row_temps: list[float] = []
-            for c in range(self._left_col, self._left_col + self._view_cols):
-                if 0 <= r < self._engine.grid.rows and 0 <= c < self._engine.grid.cols:
-                    state = self._engine.grid.get_cell(r, c).cell_state
-                    fire_heat = state.fire_intensity * 200.0
-                    temp = ambient + fire_heat + random.gauss(0, self._noise_std)
-                else:
-                    temp = ambient + random.gauss(0, self._noise_std)
+            for c_idx, cell_data in enumerate(row_data):
+                fire_heat = cell_data.get("fire_intensity", 0.0) * 200.0
+                temp = ambient + fire_heat + random.gauss(0, self._noise_std)
                 row_temps.append(round(temp, 1))
             heat_grid.append(row_temps)
+
+        # If no cell_grid provided, produce empty grid of ambient
+        if not heat_grid:
+            heat_grid = [
+                [round(ambient + random.gauss(0, self._noise_std), 1) for _ in range(self._view_cols)]
+                for _ in range(self._view_rows)
+            ]
 
         return {
             "grid_celsius": heat_grid,

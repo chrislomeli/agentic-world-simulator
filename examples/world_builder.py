@@ -22,20 +22,32 @@ Let's trace each step!
 """
 
 import asyncio
+import logging
+import os
+import random
 
+import langsmith
 from langgraph.store.memory import InMemoryStore
 
 from agents.supervisor.graph import build_supervisor_graph
+from bridge.consumer import EventBridgeConsumer
+from config import get_settings
+from domains.wildfire.sampler import sample_local_conditions
 from domains.wildfire.scenario_loader import load_scenario_from_json
+from domains.wildfire.scenarios import create_basic_wildfire
+from domains.wildfire.sensors import (
+    HumiditySensor,
+    SmokeSensor,
+    TemperatureSensor,
+    WindSensor,
+)
 from examples.config_builder import configure_environment
-from examples.pipeline_builder import build_pipeline
-from examples.supervisor_runner import run_with_supervisor
+from sensors import SensorPublisher
+from transport import SensorEventQueue
 from world.grid import FireState, TerrainType
+from world.sensor_inventory import SensorInventory
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# SECTION 1: SETUP & CONFIGURATION
-# ═══════════════════════════════════════════════════════════════════════════════
 def choose_llm(settings):
     """
     Choose which LLM to use (or run in STUB mode with no LLM).
@@ -61,6 +73,7 @@ def choose_llm(settings):
     mode = "LLM" if llm else "STUB"  # If llm is None, we'll use deterministic responses
     print(f"Running in {mode} mode")
     return llm, mode
+
 
 
 
@@ -165,132 +178,58 @@ def render_grid(engine, inventory=None, layers=None):
 # ═══════════════════════════════════════════════════════════════════════════════
 
 async def main():
+    """
+    The main pipeline orchestrator.
 
+    Flow:
+    1. Set up the world (wildfire engine on a grid)
+    2. Place sensors in the world (sensors are pure devices — no engine reference)
+    3. Run the event loop: publisher samples conditions → sensors emit → queue collects
+    4. Consumer groups events by cluster
+    5. Supervisor fans out to cluster agents, correlates, decides
+    6. Print results
+    """
 
     # ───────────────────────────────────────────────────────────────────────────
-    # STEP 00: INITIALIZE
+    # STEP 1: INITIALIZE
     # ───────────────────────────────────────────────────────────────────────────
+
     settings = configure_environment()
 
-    # ───────────────────────────────────────────────────────────────────────────
-    # STEP 01: CREATE WORLD
-    # ───────────────────────────────────────────────────────────────────────────
+    # creat a world map with sensors and resources
     engine, sensor_inventory, resource_inventory = load_scenario_from_json(settings.world_data)
+    sensors = sensor_inventory.all_sensors()
+    resources = resource_inventory.all_resources()
 
-    # ───────────────────────────────────────────────────────────────────────────
-    # STEP 02: cluster agent with Stub
-    # STEP 03: cluster agent with LLM
-    # ───────────────────────────────────────────────────────────────────────────
-    llm, mode = choose_llm(settings)  # todo change this
-
-    # ───────────────────────────────────────────────────────────────────────────
-    # STEP 04: Build the pipeline (pub/sub)
-    # ───────────────────────────────────────────────────────────────────────────
-    #
-    # The pipeline is self-contained: publisher + consumer running concurrently.
-    # It knows nothing about agents or supervisors.  You can test it standalone
-    # with:  events = await pipeline.run_to_completion(num_ticks=20)
-    pipeline = build_pipeline(engine, sensor_inventory)
-
-    # ───────────────────────────────────────────────────────────────────────────
-    # STEP 05: Build the supervisor and wire it to the pipeline
-    # ───────────────────────────────────────────────────────────────────────────
-    #
-    # The supervisor is a separate concern.  It gets events by calling
-    # pipeline.drain_batch() — the same interface a Kafka consumer would
-    # expose.  The supervisor doesn't know how events are produced.
-
-    store = InMemoryStore()
-    supervisor_graph = build_supervisor_graph(llm=llm, store=store)
-    print(f"Supervisor agent: {mode} mode  (store: {type(store).__name__})")
-
-    num_ticks = 20
-    supervisor_interval = 10
-
-    supervisor_results = await run_with_supervisor(
-        pipeline=pipeline,
-        supervisor_graph=supervisor_graph,
-        num_ticks=num_ticks,
-        supervisor_interval=supervisor_interval,
-        mode=mode,
-    )
-
-    # Use the last supervisor result for the summary below
-    supervisor_result = supervisor_results[-1][1] if supervisor_results else {}
-
-    # ───────────────────────────────────────────────────────────────────────────
-    # STEP 6: PRINT RESULTS
-    # ───────────────────────────────────────────────────────────────────────────
-
+    print(f"Created {len(sensors)} sensors across 2 clusters:")
+    for sensor in sensors:
+        print(f"  {sensor.source_id:12s}  cluster={sensor.cluster_id}  at ({sensor.grid_row}, {sensor.grid_col})")
+    print(f"Sensor layers: {sensor_inventory.layer_types()}")
     print()
-    print("=" * 65)
-    print("Pipeline complete")
-    print(f"  World ticks:        {engine.current_tick}")
-    print(f"  Supervisor calls:   {len(supervisor_results)}")
-    print(f"  Invocation ticks:   {[t for t, _ in supervisor_results]}")
-    print("=" * 65)
-
-    # What actually happened in the world (ground truth)
-    burning = [
-        (row, col)
-        for row in range(engine.grid.rows)
-        for col in range(engine.grid.cols)
-        if engine.grid.get_cell(row, col).cell_state.fire_state == FireState.BURNING
-    ]
-    burned = [
-        (row, col)
-        for row in range(engine.grid.rows)
-        for col in range(engine.grid.cols)
-        if engine.grid.get_cell(row, col).cell_state.fire_state == FireState.BURNED
-    ]
-
-    print("GROUND TRUTH (world engine — agents never see this)")
-    print(f"  Currently burning: {len(burning)} cells  {burning}")
-    print(f"  Burned out:        {len(burned)} cells")
-    print(f"  Total affected:    {len(burning) + len(burned)} cells")
-    print()
-
-    print("--- World state after pipeline ---")
+    print("--- World with sensor positions ---")
     render_grid(engine, inventory=sensor_inventory)
 
-    # What the agents detected (findings produced by supervisor's cluster agent fan-out)
-    findings = supervisor_result.get("cluster_findings", [])
-    print("AGENT FINDINGS")
-    if not findings:
-        print("  No anomalies detected.")
-    else:
-        for finding in findings:
-            print(f"  [{finding['cluster_id']:15s}] {finding['anomaly_type']:20s} conf={finding['confidence']:.2f}")
-            print(f"    {finding['summary']}")
-            print(f"    Sensors: {finding['affected_sensors']}")
+    # Show what a sensor event looks like (with sampled conditions)
+    sample_conditions = sample_local_conditions(engine, sensors[5].grid_row, sensors[5].grid_col)
+    sample_event = sensors[5].emit(sample_conditions)
+    print("Raw SensorEvent:")
+    print(f"  event_id:    {sample_event.event_id}")
+    print(f"  source_id:   {sample_event.source_id}")
+    print(f"  source_type: {sample_event.source_type}")
+    print(f"  cluster_id:  {sample_event.cluster_id}")
+    print(f"  sim_tick:    {sample_event.sim_tick}")
+    print(f"  confidence:  {sample_event.confidence}")
+    print(f"  payload:     {sample_event.payload}")
 
-    # Data shared between agents (stored in the InMemoryStore)
-    print()
-    print("CROSS-AGENT STORE CONTENTS")
-    for cluster_id in ["cluster-north", "cluster-south"]:
-        items = store.search(("incidents", cluster_id))
-        print(f"  ('incidents', '{cluster_id}')  →  {len(items)} item(s)")
-        for item in items:
-            value = item.value
-            print(
-                f"    [{item.key[:8]}]  {value.get('anomaly_type'):20s}  "
-                f"conf={value.get('confidence', 0):.2f}  {value.get('summary', '')[:50]}"
-            )
-
-    # Supervisor result
-    print()
-    print("SUPERVISOR RESULT")
-    print(f"  Status:   {supervisor_result['status']}")
-    print(f"  Summary:  {supervisor_result.get('situation_summary', 'none')}")
-    print()
-
-    commands = supervisor_result.get("pending_commands", [])
-    print(f"  Commands issued: {len(commands)}")
-    for cmd in commands:
-        print(f"    [{cmd.priority}] {cmd.command_type:12s} cluster={cmd.cluster_id}")
-        print(f"         payload: {cmd.payload}")
-
-
+    print(f"Grid: {engine.grid.rows}×{engine.grid.cols}")
+    print(
+        f"Weather: {engine.environment.temperature_c}°C, "
+        f"{engine.environment.humidity_pct}% humidity, "
+        f"{engine.environment.wind_speed_mps} m/s wind"
+    )
+    print(f"Fire state: {engine.grid.summary_counts()}")
+    print("--- Initial world state ---")
+    render_grid(engine)
 # ═══════════════════════════════════════════════════════════════════════════════
 # ENTRY POINT
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -35,6 +35,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     # ── LLM credentials ───────────────────────────────────────────────────────
+    llm: str | None = None
     anthropic_api_key: str = ""
     openai_api_key: str = ""
 
@@ -50,6 +51,7 @@ class Settings(BaseSettings):
     # Defaults point at local dev instances; override in K8s via env vars.
     kafka_bootstrap_servers: str = "localhost:9092"
     temporal_host: str = "localhost:7233"
+    world_data: str = "src/domains/wildfire/scenario_data/north_south_fire.json"
 
     # ── Database (future — Postgres checkpointer / pgvector) ─────────────────
     database_url: str = ""

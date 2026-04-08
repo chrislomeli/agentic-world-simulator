@@ -4,11 +4,15 @@
 
 ## What you're doing and why
 
-This is the first session where you write agent code.
+This is the first session where you write agent code. You're building your first LangGraph graph.
 
-You'll build a **cluster agent** — a LangGraph graph that receives batches of sensor events, classifies them, and produces structured findings. In this session the classification logic is a stub (hardcoded). Session 3 replaces it with an LLM.
+The graph is called the **cluster agent**. Its job is simple: take in a batch of sensor readings from one geographic cluster and produce **findings** — structured conclusions about what the agent determined is happening in that part of the world. A finding might say: "fire risk is high near grid position (2,3), rate of spread would be fast given current wind conditions." Or in sensor fault terms: "temperature sensor temp-A1 appears to be stuck — reading hasn't changed in 10 ticks."
 
-Starting in stub mode separates two learning curves:
+Findings are what flows upward to the supervisor in later sessions. The cluster agent doesn't know about resources, other clusters, or what to do about what it found. It only answers: *"what is happening in my cluster right now?"*
+
+<!-- TODO: insert diagram — sensor events pulled from queue into cluster agent, agent returning AnomalyFinding objects -->
+
+In this session the classification logic is a stub (hardcoded). Session 3 replaces it with an LLM. Starting in stub mode separates two learning curves:
 - **This session:** LangGraph primitives — state schemas, nodes, edges, reducers
 - **Session 3:** LLM integration — tool binding, ReAct loops, prompt engineering
 
@@ -307,20 +311,21 @@ After your analysis, respond with a JSON object (and nothing else):
 
 
 # ── Node functions ────────────────────────────────────────────────────────────
-# Each node receives the full state and returns a PARTIAL state update.
+# Each node receives the full ClusterAgentState state and returns a PARTIAL state update.
 # LangGraph merges the partial update into the current state using reducers.
 # Nodes should only return the fields they actually changed.
 
 def ingest_events(state: ClusterAgentState) -> dict:
     """
     First node — acknowledges the trigger event and sets status to processing.
+    It takes a ClusterAgentState in, and adds the status to the state - all of the actual processing will happen in the classify node (next)
 
     In a real implementation this node might also:
       - Validate the incoming event schema
       - Load recent history from the LangGraph Store
       - Decide whether the event is worth classifying (pre-filter)
 
-    For now it just logs and moves on.
+    For now, we just log and set the status to "processing"
     """
     trigger = state.get("trigger_event")
     logger.info(
@@ -617,8 +622,7 @@ def build_cluster_agent_graph(
           "error_message": None,
       })
     """
-    # todo - this is not using any of the InstrumentedGraph design
-    # todo - and is proabaly not using the tool registry either
+
     builder = StateGraph(ClusterAgentState)
 
     builder.add_node("ingest_events", ingest_events)
@@ -668,3 +672,96 @@ cluster_agent_graph = build_cluster_agent_graph()
 ---
 
 *Next: Session 3 replaces the stub `classify` node with an LLM-powered ReAct loop. The LLM calls tools to inspect sensor data, reasons about anomalies, and produces findings based on actual analysis. The graph topology adds a cycle — the ReAct loop — but the state schema and the other two nodes stay exactly the same.*
+
+---
+
+<!--
+## TALKING POINTS — not yet written into prose
+
+Things we need to communicate to the reader in this session. Rough notes, not wordsmithed.
+
+### On state
+
+- `ClusterAgentState` is a TypedDict — a plain dict with type hints. LangGraph uses it to
+  validate node outputs and to know what fields exist. Not a Pydantic model, not a class.
+- The *reducer* concept is the key thing to nail. Without a reducer, every node return
+  *replaces* the field. With `append_events`, returning `{"sensor_events": [new_event]}`
+  *appends*. Same for `add_messages`. This is how state accumulates across nodes and
+  across invocations.
+- `status` is a Literal — the graph uses it as a lightweight FSM. Nodes write it,
+  routers read it. In stub mode: idle → processing → complete. In LLM mode: add a
+  possible loop through tool calls.
+- The store is NOT in the state TypedDict. It's injected by LangGraph at compile time
+  via `builder.compile(store=store)`. Any node with `store: Optional[BaseStore] = None`
+  in its signature gets it automatically. If you see it in `report_findings` but not in
+  `state.py`, that's why.
+
+### On nodes
+
+Three nodes, three responsibilities:
+1. `ingest_events` — bookkeeping. Sets status, clears errors. Nothing interesting yet.
+   In a real system: pre-filtering, history loading, schema validation.
+2. `classify` (stub) / `classify_llm` (LLM mode) — the brain. This is the only node
+   that differs between modes. Stub returns a hardcoded placeholder. LLM mode runs
+   a ReAct loop (Session 3).
+3. `report_findings` — output packaging + store write. Takes `anomalies` from state
+   and writes them to the LangGraph Store so the supervisor can recall past incidents.
+
+### On graph topology
+
+- In stub mode: linear. START → ingest → classify → report → END.
+  The conditional edge still exists (`route_after_classify`) but only routes to one place.
+  It's there so the error path works and so Session 3 can swap the node without changing
+  the wiring.
+- In LLM mode (Session 3): adds a cycle. classify → [tool_node → classify]*N → parse_findings.
+  The cycle is the ReAct loop. LangGraph supports this — graphs are not required to be DAGs.
+
+### On stub vs. LLM mode
+
+- The graph builder pattern (`build_cluster_agent_graph(llm=None)`) is the tutorial's
+  dual-mode pattern. Same function, different topology depending on whether `llm` is provided.
+- Why not two separate graph files? Because 90% of the code is identical. The factory
+  function `_make_classify_llm_node` captures the LLM in a closure. The stub `classify`
+  is a plain function. Both have the same signature (`state → dict`) so they're
+  interchangeable as LangGraph nodes.
+- The stub exists for testing and for environments without API keys. It produces a real
+  `AnomalyFinding` (just with `anomaly_type: "stub_placeholder"`), so everything downstream
+  works without knowing the difference.
+
+### On where node logic lives (for readers who ask)
+
+- All node functions are in `graph.py`. In production you'd probably split into `nodes.py`
+  and `graph.py` (topology only). For a tutorial, colocation is intentional — you can
+  read the whole graph without jumping files.
+- The factory function pattern (`_make_classify_llm_node`) is the "injectable" pattern
+  for nodes that need external dependencies. The LLM is captured in a closure, not
+  passed through state. This is idiomatic LangGraph.
+
+### On what the cluster agent does NOT do
+
+- It does NOT query resources. That's the supervisor's job (Sessions 6–7).
+- It does NOT know about other clusters. Each cluster agent only sees its own events.
+- It does NOT decide what to do. It only answers: "what is happening in my cluster?"
+- The output (`AnomalyFinding`) is a *description*, not an action. The supervisor turns
+  descriptions into commands.
+
+### Diagram TODO
+
+- Need a diagram showing: sensor events enter from the left → cluster agent box
+  (showing the 3 nodes) → AnomalyFinding exits to the right.
+- Secondary: show that N cluster agents run in parallel (stub for now — Session 5 shows
+  the supervisor fan-out with Send API).
+- Reference: `docs/tutorial/assets/diag-02-cluster-agent-topology.md`
+
+### Open questions / things to resolve before writing full prose
+
+- The docstring in `state.py` is really good — consider excerpting it directly into the
+  tutorial rather than rewriting.
+- The `from __future__ import annotations` is still in `state.py` (line 113). That's fine
+  for state.py — the store injection issue only affects node function signatures in
+  `graph.py`. Make sure the tutorial doesn't tell students to add it to graph.py.
+- Should we show the test as part of the session? `pytest tests/agents/test_cluster.py -v`
+  is already in the checkpoint — but showing what the test *checks* might help readers
+  understand what "done" looks like.
+-->
+

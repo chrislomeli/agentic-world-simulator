@@ -1,8 +1,56 @@
-# Episode 3, Session 12: Resources + Supervisor Tools
+# Session 7: Resources and Preparedness Tools
 
-> **What we're building:** Resource tools that let the supervisor LLM query preparedness — "Do we have enough firetrucks? Are any hospitals overloaded?" — and integrate them into the supervisor's assess and decide loops.
-> **Why we need it:** Sessions 09–10 gave the supervisor the ability to correlate findings across clusters. This session adds the ability to assess preparedness. The supervisor can now answer: "What happened (findings) + Are we prepared (resources) → What should we do (commands)?"
-> **What you'll have at the end:** A supervisor that uses 8+ tools (4 supervisor + 4 resource) to examine both what happened and whether the system is ready to respond — the first complete context for decision-making.
+---
+
+## What you're doing and why
+
+Sessions 5–6 gave the supervisor tools to examine *what happened* — findings from cluster agents. But findings alone don't tell you what to do. If cluster-north reports a temperature spike, the supervisor needs to know: are there firetrucks nearby? Are they available?
+
+This session adds resource tools — a second set of `@tool` functions that query the `ResourceInventory`. Combined with the supervisor tools from Session 6, the LLM now has complete context: what happened + are we prepared → what should we do.
+
+The key pattern is **additive tool composition**: the tool set expands based on what context you provide to `build_supervisor_graph()`. Pass a `ResourceInventory` and you get 8 tools. Don't pass one and you get 4. The graph works either way.
+
+---
+
+## Setup
+
+This session builds on Sessions 5–6. If you're continuing, activate your environment and move on.
+
+If you're starting fresh:
+
+```bash
+uv venv && source .venv/bin/activate
+uv pip install -e ".[llm]" --group dev
+git remote add tutorial https://github.com/chrislomeli/agentic-world-simulator.git
+git fetch tutorial
+git checkout tutorial/main -- src/world/ src/domains/ src/sensors/ src/transport/ src/bridge/ src/resources/ src/config.py tests/
+git checkout tutorial/main -- src/agents/ src/tools/
+pytest tests/agents/test_supervisor.py tests/resources/ -q   # should pass before you start
+```
+
+---
+
+## Rubric coverage
+
+| Skill | Level | Where in this session |
+|-------|-------|-----------------------|
+| Tool definition — @tool decorator | foundational | `resource_tools.py` — 4 tools querying `ResourceInventory` |
+| ToolNode + bind_tools | foundational | `SUPERVISOR_TOOLS + RESOURCE_TOOLS` composed into one `ToolNode` |
+
+---
+
+## What you're building
+
+| File | Change | What it contains |
+|------|--------|-----------------|
+| `src/tools/resource_tools.py` | **Create** | 4 `@tool` functions: `get_resource_summary`, `get_resources_by_cluster`, `get_resources_by_type`, `check_preparedness` |
+| `src/agents/supervisor/graph.py` | **Modify** | Additive tool composition in `build_supervisor_graph()` — add `RESOURCE_TOOLS` when `resource_inventory` is provided |
+
+When you're done:
+
+```bash
+pytest tests/resources/ tests/tools/ -v
+```
 
 ---
 
@@ -385,6 +433,19 @@ The supervisor now has complete context: findings (what happened) + resources (a
 
 ---
 
+## Checkpoint
+
+```bash
+pytest tests/resources/ tests/tools/ -v
+```
+
+Key tests to look for:
+- `test_resource_tools` — all 4 tools return correct data shapes
+- `test_check_preparedness_with_gaps` — gap detection works when resources are disabled
+- `test_supervisor_graph_with_resource_tools` — 8-tool supervisor graph compiles and runs
+
+---
+
 ## Key files
 
 - `src/tools/resource_tools.py` — 4 resource tools: `get_resource_summary`, `get_resources_by_cluster`, `get_resources_by_type`, `check_preparedness`
@@ -394,4 +455,4 @@ The supervisor now has complete context: findings (what happened) + resources (a
 
 ---
 
-*Next: Session 13 wires everything together into a complete end-to-end pipeline: world engine → sensors → queue → cluster agents → supervisor → commands. All systems active, all tools available, full observability with LangSmith tracing.*
+*Next: Session 8 wires everything together into a complete end-to-end pipeline: world engine → sensors → queue → cluster agents → supervisor → commands. All systems active, all tools available, full observability with LangSmith tracing.*

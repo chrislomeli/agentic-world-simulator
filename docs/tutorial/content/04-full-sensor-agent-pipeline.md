@@ -1,8 +1,50 @@
-# Episode 2, Session 8: The Complete Pipeline
+# Session 4: The Full Sensor-to-Agent Pipeline
 
-> **What we're building:** The full async pipeline from world tick to agent findings — sensors emit, publisher enqueues, consumer batches, agent classifies, findings flow out.
-> **Why we need it:** Sessions 01–07 built all the pieces in isolation. This session wires them together into a single end-to-end flow. For the first time, the simulation drives the agent: fire spreads in the world, sensors observe it (with noise), the agent reasons about what it sees, and produces findings.
-> **What you'll have at the end:** A running system where you can watch the world evolve, see sensor events flow through the queue, observe the agent invoke with batched events, and inspect the findings it produces — the first complete loop from physics to AI reasoning.
+---
+
+## What you're doing and why
+
+Sessions 1–3 built all the pieces in isolation: world engine, sensors, transport, and cluster agent. This session wires them together. No new source files — just connecting the interfaces.
+
+This is important for a reason beyond "getting it to run": until the pieces run together, you don't know if the *interfaces* match. Does the consumer construct the right state dict for the agent? Do findings flow back through the callback? Does the async orchestration deadlock? This session answers those questions.
+
+You also add observability here: LangSmith tracing and LangGraph stream mode. Both are important for debugging agent behavior in later sessions.
+
+---
+
+## Setup
+
+This session builds on Sessions 1–3. If you're continuing, activate your environment and move on.
+
+If you're starting fresh:
+
+```bash
+uv venv && source .venv/bin/activate
+uv pip install -e ".[llm]" --group dev
+git remote add tutorial https://github.com/chrislomeli/agentic-world-simulator.git
+git fetch tutorial
+git checkout tutorial/main -- src/world/ src/domains/ src/sensors/ src/transport/ src/bridge/ src/resources/ src/config.py tests/
+git checkout tutorial/main -- src/agents/ src/tools/
+pytest tests/ -q --ignore=tests/agents/test_supervisor.py   # should pass before you start
+```
+
+---
+
+## Rubric coverage
+
+| Skill | Level | Where in this session |
+|-------|-------|-----------------------|
+| Compile + invoke / stream | foundational | `graph.stream(state, stream_mode="updates")` |
+| stream_mode — values vs updates | mid-level | Comparing `stream_mode="updates"` output to `invoke()` |
+| LangSmith tracing | mid-level | `LANGCHAIN_TRACING_V2` environment variables |
+
+---
+
+## What you're building
+
+No new source files. This session runs the pipeline you already built.
+
+The key task is writing and running the integration script that connects all components.
 
 ---
 
@@ -331,13 +373,33 @@ The pipeline is complete. World physics → sensor observations → async transp
 
 ---
 
+## Checkpoint
+
+Run the pipeline script and verify the output matches the expected output above.
+
+For stub mode (no API key needed):
+```bash
+python -c "
+import asyncio
+from domains.wildfire.scenarios import create_basic_wildfire
+from sensors.publisher import SensorPublisher
+from transport.queue import SensorEventQueue
+from bridge.consumer import EventBridgeConsumer
+from agents.cluster.graph import build_cluster_agent_graph
+# ... (the full pipeline script from this session)
+"
+```
+
+You should see events enqueued, agent invocations, and findings collected. If anything errors, check that your virtual environment is active and `pytest tests/ -q` passes first.
+
+---
+
 ## Key files
 
 - `src/sensors/publisher.py` — `SensorPublisher`: async tick loop, drives sensors, enqueues events
 - `src/bridge/consumer.py` — `EventBridgeConsumer`: async read loop, batches events, invokes agent, collects findings
 - `src/agents/cluster/graph.py` — `build_cluster_agent_graph()`: compiles the cluster agent (stub or LLM mode)
-- `examples/pipeline_demo_annotated.py` — complete reference implementation with comments
 
 ---
 
-*Next: Session 09 adds the supervisor agent. Until now, each cluster agent works independently. The supervisor correlates findings across all clusters, assesses the overall situation, and decides on actions. This is where the multi-agent architecture comes together — cluster agents report upward, the supervisor aggregates and reasons globally.*
+*Next: Session 5 adds the supervisor agent. Until now, each cluster agent works independently. The supervisor correlates findings across all clusters, assesses the overall situation, and decides on actions. This is where the multi-agent architecture comes together — cluster agents report upward, the supervisor aggregates and reasons globally.*

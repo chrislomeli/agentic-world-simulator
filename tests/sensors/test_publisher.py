@@ -18,7 +18,7 @@ class _FakeSensor(SensorBase):
         super().__init__(**kwargs)
         self._call_count = 0
 
-    def read(self):
+    def read(self, local_conditions=None):
         self._call_count += 1
         return {"count": self._call_count}
 

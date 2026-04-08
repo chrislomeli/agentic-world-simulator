@@ -38,6 +38,7 @@ def _make_finding(finding_id: str = "f1", cluster_id: str = "c1") -> AnomalyFind
 def _make_supervisor_state(**overrides) -> dict:
     base = {
         "active_cluster_ids": ["cluster-north"],
+        "events_by_cluster": {},
         "cluster_findings": [],
         "messages": [],
         "pending_commands": [],
@@ -173,6 +174,7 @@ class TestSupervisorGraph:
         graph = build_supervisor_graph()
         result = graph.invoke({
             "active_cluster_ids": ["cluster-north", "cluster-south"],
+            "events_by_cluster": {},
             "cluster_findings": [],
             "messages": [],
             "pending_commands": [],
@@ -187,6 +189,7 @@ class TestSupervisorGraph:
         graph = build_supervisor_graph(store=store)
         graph.invoke({
             "active_cluster_ids": ["cluster-north"],
+            "events_by_cluster": {},
             "cluster_findings": [_make_finding()],
             "messages": [],
             "pending_commands": [],
@@ -210,6 +213,7 @@ class TestSupervisorGraph:
         graph = build_supervisor_graph(store=store)
         result = graph.invoke({
             "active_cluster_ids": ["cluster-north"],
+            "events_by_cluster": {},
             "cluster_findings": [],
             "messages": [],
             "pending_commands": [],

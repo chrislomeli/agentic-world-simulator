@@ -10,5 +10,6 @@ here it is an async loop reading from SensorEventQueue.
 """
 
 from bridge.consumer import EventBridgeConsumer
+from bridge.pipeline_runner import PipelineRunner
 
-__all__ = ["EventBridgeConsumer"]
+__all__ = ["EventBridgeConsumer", "PipelineRunner"]

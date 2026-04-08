@@ -15,7 +15,7 @@ class StubSensor(SensorBase):
     def __init__(self, source_id: str, cluster_id: str = "cluster-test", **kwargs):
         super().__init__(source_id=source_id, cluster_id=cluster_id, **kwargs)
 
-    def read(self):
+    def read(self, local_conditions=None):
         return {"value": 42}
 
 
@@ -26,7 +26,7 @@ class StubSensorB(SensorBase):
     def __init__(self, source_id: str, cluster_id: str = "cluster-test", **kwargs):
         super().__init__(source_id=source_id, cluster_id=cluster_id, **kwargs)
 
-    def read(self):
+    def read(self, local_conditions=None):
         return {"value": 99}
 
 

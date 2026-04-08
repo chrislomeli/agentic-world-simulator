@@ -2,44 +2,51 @@
 ogar.bridge.consumer
 
 Async event bridge consumer — reads SensorEvents from a queue
-and dispatches them to cluster agent graphs.
+and groups them by cluster for the supervisor to process.
 
 Responsibility
 ──────────────
-The consumer sits between the transport queue and the agent layer.
-For each event it:
-  1. Reads the event's cluster_id.
-  2. Looks up (or creates) the compiled cluster agent graph for that cluster.
-  3. Invokes the graph with the event as the trigger.
-  4. Collects the resulting AnomalyFindings and stores them.
+The consumer sits between the transport queue and the supervisor.
+It collects sensor events as they arrive and groups them by cluster_id.
+The supervisor then fans out to cluster agents with these grouped events.
 
-In a production system this would be a Kafka consumer group with
-partition assignment by cluster_id.  Here it is a single async loop
-reading from SensorEventQueue.
+This is Option B architecture: the supervisor owns agent orchestration.
+The consumer's only job is to drain the queue and group events — it does
+NOT invoke cluster agents directly.
 
 Why async?
 ──────────
-Agent graph invocations may involve LLM calls (I/O-bound).
-Running as an async consumer lets us process events without blocking
-the publisher or other consumers.
+The publisher (world engine ticking + sensor emission) is async.
+Running the consumer as an async loop lets it drain the queue while
+the publisher is still producing events.
 
 Usage
 ─────
-  consumer = EventBridgeConsumer(queue=queue, agent_graph=cluster_graph)
-  task = asyncio.create_task(consumer.run())
-  # ... later ...
+  # Concurrent: publisher and consumer run as parallel async tasks.
+  # The orchestrator periodically pulls batched events for the supervisor.
+
+  consumer = EventBridgeConsumer(queue=queue)
+  pub_task = asyncio.create_task(publisher.run(ticks=20))
+  con_task = asyncio.create_task(consumer.run())
+
+  # Periodically (or after publisher finishes):
+  batch = consumer.drain_batch()   # pull + reset
+  result = supervisor_graph.invoke({
+      "active_cluster_ids": list(batch.keys()),
+      "events_by_cluster": batch,
+      ...
+  })
+
+  # When done:
   consumer.stop()
-  await task
+  await con_task
 """
 
 from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
-from typing import Any
 
-from agents.cluster.state import AnomalyFinding
 from transport.queue import SensorEventQueue
 from transport.schemas import SensorEvent
 
@@ -48,53 +55,25 @@ logger = logging.getLogger(__name__)
 
 class EventBridgeConsumer:
     """
-    Async consumer that routes SensorEvents to cluster agent graphs.
+    Async consumer that collects SensorEvents grouped by cluster.
 
-    The consumer reads events one at a time from the queue, groups
-    them by cluster_id, and invokes the cluster agent graph for each
-    event.  Results (AnomalyFindings) are accumulated and can be
-    retrieved via collected_findings.
+    Drains the queue and accumulates events into events_by_cluster.
+    The supervisor reads events_by_cluster to populate cluster agents
+    via the Send API fan-out.
 
     Parameters
     ──────────
-    queue        : The SensorEventQueue to consume from.
-    agent_graph  : A compiled LangGraph cluster agent graph.
-                   Must accept ClusterAgentState and return it.
-    on_finding   : Optional callback invoked for each AnomalyFinding.
-                   Signature: (finding: AnomalyFinding) -> None
-    batch_size   : How many events to accumulate per cluster before
-                   invoking the graph.  Default 1 = invoke per event.
+    queue : The SensorEventQueue to consume from.
     """
 
-    def __init__(
-        self,
-        *,
-        queue: SensorEventQueue,
-        agent_graph: Any,
-        on_finding: Callable[[AnomalyFinding], None] | None = None,
-        batch_size: int = 1,
-    ) -> None:
+    def __init__(self, *, queue: SensorEventQueue) -> None:
         self._queue = queue
-        self._agent_graph = agent_graph
-        self._on_finding = on_finding
-        self._batch_size = max(1, batch_size)
-
-        # Per-cluster event buffers for batching.
-        self._buffers: dict[str, list[SensorEvent]] = {}
-
-        # All findings collected across all invocations.
-        self.collected_findings: list[AnomalyFinding] = []
-
-        # Total events consumed.
+        self.events_by_cluster: dict[str, list[SensorEvent]] = {}
         self.events_consumed: int = 0
-
-        # Total graph invocations.
-        self.invocations: int = 0
-
         self._stop_requested: bool = False
 
     def stop(self) -> None:
-        """Signal the consumer to stop after finishing the current event."""
+        """Signal the consumer to stop after the current event."""
         logger.info("EventBridgeConsumer stop requested")
         self._stop_requested = True
 
@@ -109,22 +88,18 @@ class EventBridgeConsumer:
         """
         self._stop_requested = False
         self.events_consumed = 0
-        self.invocations = 0
-        self.collected_findings = []
-        self._buffers = {}
+        self.events_by_cluster = {}
 
         logger.info(
-            "EventBridgeConsumer starting — batch_size=%d, limit=%s",
-            self._batch_size,
+            "EventBridgeConsumer starting — limit=%s",
             max_events if max_events is not None else "∞",
         )
 
         while True:
             if self._stop_requested:
                 logger.info(
-                    "EventBridgeConsumer stopped after %d events, %d invocations",
+                    "EventBridgeConsumer stopped after %d events",
                     self.events_consumed,
-                    self.invocations,
                 )
                 break
 
@@ -135,8 +110,6 @@ class EventBridgeConsumer:
                 )
                 break
 
-            # Read one event from the queue.
-            # Use wait_for with a short timeout so we can check stop conditions.
             try:
                 event = await asyncio.wait_for(self._queue.get(), timeout=0.5)
             except TimeoutError:
@@ -153,66 +126,34 @@ class EventBridgeConsumer:
                 event.sim_tick,
             )
 
-            # Buffer events per cluster for batching.
-            if cluster_id not in self._buffers:
-                self._buffers[cluster_id] = []
-            self._buffers[cluster_id].append(event)
-
-            # Invoke the graph when the batch is full.
-            if len(self._buffers[cluster_id]) >= self._batch_size:
-                await self._invoke_agent(cluster_id)
+            if cluster_id not in self.events_by_cluster:
+                self.events_by_cluster[cluster_id] = []
+            self.events_by_cluster[cluster_id].append(event)
 
             self._queue.task_done()
 
-        # Flush any remaining partial batches.
-        for cluster_id in list(self._buffers.keys()):
-            if self._buffers[cluster_id]:
-                await self._invoke_agent(cluster_id)
+    def drain_batch(self) -> dict[str, list[SensorEvent]]:
+        """
+        Pull the current batch of grouped events and reset the buffer.
 
-    async def _invoke_agent(self, cluster_id: str) -> None:
-        """Invoke the cluster agent graph with buffered events."""
-        events = self._buffers.pop(cluster_id, [])
-        if not events:
-            return
+        This is the interface between the async consumer and the sync
+        supervisor.  The orchestrator calls this periodically to get
+        accumulated events, then passes them to supervisor_graph.invoke().
 
-        trigger = events[-1]  # Most recent event is the trigger.
+        Returns
+        ───────
+        dict mapping cluster_id → list of SensorEvents accumulated since
+        the last drain.  The internal buffer is cleared after this call.
 
-        state = {
-            "cluster_id": cluster_id,
-            "workflow_id": f"{cluster_id}::bridge-{self.invocations}",
-            "sensor_events": events,
-            "trigger_event": trigger,
-            "messages": [],
-            "anomalies": [],
-            "status": "idle",
-            "error_message": None,
-        }
-
+        Thread-safety: called from the same asyncio loop as run(), so
+        no lock is needed.  If you move to threads, add a Lock.
+        """
+        batch = self.events_by_cluster
+        self.events_by_cluster = {}
+        drained = self.events_consumed
+        self.events_consumed = 0
         logger.info(
-            "Invoking cluster agent for %s with %d event(s)",
-            cluster_id,
-            len(events),
+            "EventBridgeConsumer drained %d events across %d cluster(s)",
+            drained, len(batch),
         )
-
-        try:
-            result = self._agent_graph.invoke(state)
-            self.invocations += 1
-
-            findings = result.get("anomalies", [])
-            for finding in findings:
-                self.collected_findings.append(finding)
-                if self._on_finding:
-                    self._on_finding(finding)
-
-            logger.info(
-                "Cluster agent %s returned %d finding(s), status=%s",
-                cluster_id,
-                len(findings),
-                result.get("status"),
-            )
-
-        except Exception:
-            logger.exception(
-                "Error invoking cluster agent for %s",
-                cluster_id,
-            )
+        return batch

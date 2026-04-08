@@ -14,7 +14,7 @@ class _StubSensor(SensorBase):
         super().__init__(**kwargs)
         self._reading = reading or {"value": 42}
 
-    def read(self):
+    def read(self, local_conditions=None):
         return dict(self._reading)
 
 

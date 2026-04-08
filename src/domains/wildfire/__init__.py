@@ -29,6 +29,8 @@ from domains.wildfire.physics import SimpleFirePhysicsModule as SimpleFirePhysic
 from domains.wildfire.rothermel_physics import (
     RothermelFirePhysicsModule as RothermelFirePhysicsModule,
 )
+from domains.wildfire.sampler import sample_local_conditions as sample_local_conditions
+from domains.wildfire.sampler import sample_thermal_region as sample_thermal_region
 from domains.wildfire.scenarios import create_basic_wildfire as create_basic_wildfire
 from domains.wildfire.scenarios import (
     create_full_wildfire_scenario as create_full_wildfire_scenario,
@@ -71,4 +73,7 @@ __all__ = [
     "SmokeSensor",
     "BarometricSensor",
     "ThermalCameraSensor",
+    # Sampler
+    "sample_local_conditions",
+    "sample_thermal_region",
 ]

@@ -44,6 +44,7 @@ from typing_extensions import TypedDict
 
 from actuators.base import ActuatorCommand
 from agents.cluster.state import AnomalyFinding
+from transport.schemas import SensorEvent
 
 # ── Custom reducer for aggregating cluster findings ───────────────────────────
 
@@ -81,6 +82,12 @@ class SupervisorState(TypedDict):
     # Which clusters have active events that triggered this run.
     # The supervisor fans out to ALL of these via Send API.
     active_cluster_ids: list[str]
+
+    # ── Sensor events (input to cluster agents) ───────────────────────
+    # Collected by the bridge consumer and passed to the supervisor.
+    # fan_out_to_clusters reads this to populate each cluster agent's
+    # sensor_events before invoking it.  Keyed by cluster_id.
+    events_by_cluster: dict[str, list[SensorEvent]]
 
     # ── Aggregated findings ───────────────────────────────────────────
     # Populated by cluster agents via Send API fan-out.
