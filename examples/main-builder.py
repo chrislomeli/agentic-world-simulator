@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-pipeline_demo.py — ANNOTATED FOR LEARNING
+main-builder.py — Complete assembled example
 
 This script demonstrates the complete pipeline from world engine to
 supervisor graph, with clean separation of concerns:
@@ -26,6 +26,7 @@ Neither side knows about the other — the store is the contract.
 
 import asyncio
 
+from examples.agent_connector import select_llm
 from examples.config_builder import configure_environment
 from examples.event_loop_builder import (
     build_event_loop,
@@ -43,35 +44,11 @@ from resources import evaluate_preparedness, severity_from_score
 from resources.inventory import ResourceInventory
 from world.grid import FireState, TerrainType
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# SECTION 1: SETUP & CONFIGURATION
-# ═══════════════════════════════════════════════════════════════════════════════
 
-def choose_llm(settings):
-    """
-    Choose which LLM to use (or run in STUB mode with no LLM).
-
-    For learning, STUB mode is fine. To use a real LLM, uncomment one option.
-    """
-    llm = None
-
-    # Option 1: Use Claude (requires ANTHROPIC_API_KEY)
-    # from langchain_anthropic import ChatAnthropic
-    # llm = ChatAnthropic(model="claude-haiku-4-5-20251001", temperature=0,
-    #                     api_key=settings.anthropic_api_key)
-
-    # Option 2: Use GPT-4 (requires OPENAI_API_KEY)
-    # from langchain_openai import ChatOpenAI
-    # llm = ChatOpenAI(model="gpt-4o-mini", temperature=0,
-    #                  api_key=settings.openai_api_key)
-
-    mode = "LLM" if llm else "STUB"
-    print(f"Running in {mode} mode")
-    return llm, mode
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SECTION 2: WORLD VISUALIZATION
+# SECTION 1: WORLD VISUALIZATION
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def render_grid(engine, inventory=None, layers=None):
@@ -126,7 +103,7 @@ def render_grid(engine, inventory=None, layers=None):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SECTION 3: PREPAREDNESS REPORT
+# SECTION 2: PREPAREDNESS REPORT
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def print_preparedness_report(
@@ -161,7 +138,7 @@ def print_preparedness_report(
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SECTION 4: MAIN PIPELINE
+# SECTION 3: MAIN PIPELINE
 # ═══════════════════════════════════════════════════════════════════════════════
 
 async def main():
@@ -171,7 +148,7 @@ async def main():
     engine, sensor_inventory, resource_inventory = load_scenario_from_json(settings.world_data)
 
     # ── STEP 2: Choose LLM or STUB ───────────────────────────────────────────
-    llm, mode = choose_llm(settings)
+    llm, mode = select_llm(settings)
 
     # ── STEP 3: Build the shared LocationStateStore ──────────────────────────
     #

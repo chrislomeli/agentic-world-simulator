@@ -1,84 +1,32 @@
 #!/usr/bin/env python3
 """
-pipeline_demo.py — ANNOTATED FOR LEARNING
+world_builder.py — STEP 02: World setup & sensors
 
-This script demonstrates the complete agent-driven simulation pipeline:
+Load a scenario from JSON and explore the world grid and sensor inventory.
+This step has no agents, no pipeline — just the raw simulation state.
 
-    World Engine (wildfire)
-           ↓
-    Sampler (samples local conditions at sensor positions)
-           ↓
-    Sensors (add noise to local conditions → readings)
-           ↓
-    Publisher → Event Queue (collects readings)
-           ↓
-    Consumer (groups events by cluster)
-           ↓
-    Supervisor Agent (fans out to cluster agents, correlates, decides)
+    WorldEngine  (wildfire grid + environment)
+    SensorInventory  (sensors placed at grid positions, grouped by cluster)
+    ResourceInventory  (response assets assigned to clusters)
 
-The flow is: world → sampler → sensors → queue → consumer → supervisor → cluster agents → commands
-
-Let's trace each step!
+After running this step you will be able to see:
+  - The world grid rendered as ASCII art
+  - Where each sensor sits on the grid
+  - What a raw SensorEvent looks like before it enters the pipeline
 """
 
 import asyncio
-import logging
-import os
-import random
 
-import langsmith
-from langgraph.store.memory import InMemoryStore
-
-from agents.supervisor.graph import build_supervisor_graph
-from bridge.consumer import EventBridgeConsumer
-from config import get_settings
 from domains.wildfire.sampler import sample_local_conditions
 from domains.wildfire.scenario_loader import load_scenario_from_json
-from domains.wildfire.scenarios import create_basic_wildfire
-from domains.wildfire.sensors import (
-    HumiditySensor,
-    SmokeSensor,
-    TemperatureSensor,
-    WindSensor,
-)
 from examples.config_builder import configure_environment
-from sensors import SensorPublisher
-from transport import SensorEventQueue
 from world.grid import FireState, TerrainType
-from world.sensor_inventory import SensorInventory
-
-
-def choose_llm(settings):
-    """
-    Choose which LLM to use (or run in STUB mode with no LLM).
-
-    The code is set up to use either Claude, GPT-4, or a stub (deterministic fake).
-    For learning, STUB mode is fine. To use a real LLM, uncomment one of the options.
-
-    Returns:
-        (llm_object, "LLM" or "STUB") — the LLM callable and which mode we're running
-    """
-    llm = None
-
-    # Option 1: Use Claude (requires ANTHROPIC_API_KEY)
-    # from langchain_anthropic import ChatAnthropic
-    # llm = ChatAnthropic(model="claude-haiku-4-5-20251001", temperature=0,
-    #                     api_key=settings.anthropic_api_key)
-
-    # Option 2: Use GPT-4 (requires OPENAI_API_KEY)
-    # from langchain_openai import ChatOpenAI
-    # llm = ChatOpenAI(model="gpt-4o-mini", temperature=0,
-    #                  api_key=settings.openai_api_key)
-
-    mode = "LLM" if llm else "STUB"  # If llm is None, we'll use deterministic responses
-    print(f"Running in {mode} mode")
-    return llm, mode
 
 
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SECTION 2: WORLD VISUALIZATION
+# SECTION 1: WORLD VISUALIZATION
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def render_grid(engine, inventory=None, layers=None):
@@ -174,20 +122,18 @@ def render_grid(engine, inventory=None, layers=None):
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SECTION 3: MAIN PIPELINE
+# SECTION 2: WORLD SETUP
 # ═══════════════════════════════════════════════════════════════════════════════
 
 async def main():
     """
-    The main pipeline orchestrator.
+    Load a scenario and inspect the world + sensor state.
 
     Flow:
-    1. Set up the world (wildfire engine on a grid)
-    2. Place sensors in the world (sensors are pure devices — no engine reference)
-    3. Run the event loop: publisher samples conditions → sensors emit → queue collects
-    4. Consumer groups events by cluster
-    5. Supervisor fans out to cluster agents, correlates, decides
-    6. Print results
+    1. Configure environment (API keys, logging)
+    2. Load scenario (world engine, sensors, resources) from JSON
+    3. Render the world grid with sensor positions
+    4. Show a sample SensorEvent to illustrate the data model
     """
 
     # ───────────────────────────────────────────────────────────────────────────

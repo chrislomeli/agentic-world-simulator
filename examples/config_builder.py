@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
+"""
+config_builder.py — STEP 01: Environment setup & configuration
 
+Load API keys from .env, configure logging, and enable LangSmith tracing.
+This is the first thing every other step calls — get the environment ready
+before touching the world engine or any agents.
+
+The main() here is just a smoke-test: call configure_environment() and verify
+the settings load without errors.
+"""
 
 import asyncio
 import logging

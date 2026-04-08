@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-event_loop_builder.py — Factory functions for the event loop + supervisor callback.
+event_loop_builder.py — STEP 06: Factory functions for the event loop + supervisor callback.
 
 Three functions, three concerns:
 
