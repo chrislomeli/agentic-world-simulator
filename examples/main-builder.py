@@ -29,6 +29,7 @@ import asyncio
 from examples.agent_connector import select_llm
 from examples.config_builder import configure_environment
 from examples.event_loop_builder import (
+    SupervisorResultCollector,
     build_event_loop,
     make_supervisor_callback,
     run_pipeline_with_event_loop,
@@ -44,7 +45,140 @@ from resources import evaluate_preparedness, severity_from_score
 from resources.inventory import ResourceInventory
 from world.grid import FireState, TerrainType
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# SECTION 3: MAIN PIPELINE
+# ═══════════════════════════════════════════════════════════════════════════════
 
+async def main():
+    # ── STEP 0: set the configurations ─────────────────────────────────────────────────
+    settings = configure_environment()
+
+    # ── STEP 1: Choose LLM or STUB ───────────────────────────────────────────
+    llm, mode = select_llm(settings)
+
+    # ── STEP 2: Load world scenario ─────────────────────────────────────────────────
+    engine, sensor_inventory, resource_inventory = load_scenario_from_json(settings.world_data)
+
+    # ── STEP 3: Build the shared LocationStateStore ──────────────────────────
+    #
+    # This is the seam between the pipeline and the event loop.
+    # The pipeline's consumer writes here.  The event loop reads here.
+    location_store = InMemoryLocationStore()
+
+    # ── STEP 4: Build the data pipeline ──────────────────────────────────────
+    #
+    # WorldEngine → Sensors → Publisher → Queue → Consumer → LocationStateStore
+    #
+    # The pipeline is LangGraph-free.  It knows nothing about agents.
+    pipeline = build_pipeline(engine, sensor_inventory, store=location_store)
+
+    # ── STEP 5: Build the supervisor graph ───────────────────────────────────
+    #
+    # One graph invocation handles everything:
+    #   fan_out_to_clusters (Send API) → cluster agents in parallel
+    #   → [synchronization barrier]
+    #   → assess_situation → decide_actions → dispatch_commands
+    agent_store = InMemoryStore()
+    supervisor_graph = build_supervisor_graph(llm=llm, store=agent_store)
+    print(f"Supervisor graph: {mode} mode  (store: {type(agent_store).__name__})")
+
+    # ── STEP 6: Build the event loop ─────────────────────────────────────────
+    #
+    # LocationStateStore → ScoringFilter → on_batch → supervisor_graph.invoke()
+    #
+    # The event loop polls the store, checks for triggered locations,
+    # and invokes the supervisor when risk conditions are met.
+    #
+    # make_supervisor_callback() returns a closure that captures the graph
+    # and the result's accumulator.  The EventLoop never sees the graph —
+    # it just calls on_batch(batch) when it has a batch to process
+    collector = SupervisorResultCollector()
+    on_batch = make_supervisor_callback(supervisor_graph, collector)
+    event_loop = build_event_loop(location_store, on_batch)
+
+    # ── STEP 7: Run pipeline and event loop concurrently ─────────────────────
+    #
+    # The pipeline produces data.  The event loop consumes it.
+    # They share the location_store — that's the only coupling.
+    # run_pipeline_with_event_loop handles lifecycle, cancellation,
+    # and a final drain pass.
+    await run_pipeline_with_event_loop(pipeline, event_loop, num_ticks=20)
+
+    supervisor_result = collector.last_result
+
+    # ── STEP 8: Print results ────────────────────────────────────────────────
+    print()
+    print("=" * 65)
+    print("Pipeline complete")
+    print(f"  World ticks:        {engine.current_tick}")
+    print(f"  Supervisor calls:   {collector.count}")
+    print(f"  Invocation ticks:   {collector.invocation_ticks}")
+    print(f"  Event loop cycles:  {event_loop.cycles_completed}")
+    print(f"  Locations in store: {location_store.get_all_location_ids()}")
+    print("=" * 65)
+
+    # Ground truth
+    burning = [
+        (row, col)
+        for row in range(engine.grid.rows)
+        for col in range(engine.grid.cols)
+        if engine.grid.get_cell(row, col).cell_state.fire_state == FireState.BURNING
+    ]
+    burned = [
+        (row, col)
+        for row in range(engine.grid.rows)
+        for col in range(engine.grid.cols)
+        if engine.grid.get_cell(row, col).cell_state.fire_state == FireState.BURNED
+    ]
+
+    print("GROUND TRUTH (world engine — agents never see this)")
+    print(f"  Currently burning: {len(burning)} cells  {burning}")
+    print(f"  Burned out:        {len(burned)} cells")
+    print(f"  Total affected:    {len(burning) + len(burned)} cells")
+    print()
+
+    print("--- World state after pipeline ---")
+    render_grid(engine, inventory=sensor_inventory)
+
+    # Agent findings
+    findings = supervisor_result.get("cluster_findings", [])
+    print("AGENT FINDINGS")
+    if not findings:
+        print("  No anomalies detected.")
+    else:
+        for finding in findings:
+            print(f"  [{finding['cluster_id']:15s}] {finding['anomaly_type']:20s} conf={finding['confidence']:.2f}")
+            print(f"    {finding['summary']}")
+            print(f"    Sensors: {finding['affected_sensors']}")
+
+    # Cross-agent store
+    print()
+    print("CROSS-AGENT STORE CONTENTS")
+    for cluster_id in ["cluster-north", "cluster-south"]:
+        items = agent_store.search(("incidents", cluster_id))
+        print(f"  ('incidents', '{cluster_id}')  →  {len(items)} item(s)")
+        for item in items:
+            value = item.value
+            print(
+                f"    [{item.key[:8]}]  {value.get('anomaly_type'):20s}  "
+                f"conf={value.get('confidence', 0):.2f}  {value.get('summary', '')[:50]}"
+            )
+
+    # Supervisor result
+    print()
+    print("SUPERVISOR RESULT")
+    print(f"  Status:   {supervisor_result.get('status', 'n/a')}")
+    print(f"  Summary:  {supervisor_result.get('situation_summary', 'none')}")
+    print()
+
+    commands = supervisor_result.get("pending_commands", [])
+    print(f"  Commands issued: {len(commands)}")
+    for cmd in commands:
+        print(f"    [{cmd.priority}] {cmd.command_type:12s} cluster={cmd.cluster_id}")
+        print(f"         payload: {cmd.payload}")
+
+    # Preparedness evaluation
+    print_preparedness_report(location_store, resource_inventory)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -137,141 +271,6 @@ def print_preparedness_report(
     print()
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# SECTION 3: MAIN PIPELINE
-# ═══════════════════════════════════════════════════════════════════════════════
-
-async def main():
-
-    # ── STEP 1: Load scenario ─────────────────────────────────────────────────
-    settings = configure_environment()
-    engine, sensor_inventory, resource_inventory = load_scenario_from_json(settings.world_data)
-
-    # ── STEP 2: Choose LLM or STUB ───────────────────────────────────────────
-    llm, mode = select_llm(settings)
-
-    # ── STEP 3: Build the shared LocationStateStore ──────────────────────────
-    #
-    # This is the seam between the pipeline and the event loop.
-    # The pipeline's consumer writes here.  The event loop reads here.
-    location_store = InMemoryLocationStore()
-
-    # ── STEP 4: Build the data pipeline ──────────────────────────────────────
-    #
-    # WorldEngine → Sensors → Publisher → Queue → Consumer → LocationStateStore
-    #
-    # The pipeline is LangGraph-free.  It knows nothing about agents.
-    pipeline = build_pipeline(engine, sensor_inventory, store=location_store)
-
-    # ── STEP 5: Build the supervisor graph ───────────────────────────────────
-    #
-    # One graph invocation handles everything:
-    #   fan_out_to_clusters (Send API) → cluster agents in parallel
-    #   → [synchronization barrier]
-    #   → assess_situation → decide_actions → dispatch_commands
-    agent_store = InMemoryStore()
-    supervisor_graph = build_supervisor_graph(llm=llm, store=agent_store)
-    print(f"Supervisor graph: {mode} mode  (store: {type(agent_store).__name__})")
-
-    # ── STEP 6: Build the event loop ─────────────────────────────────────────
-    #
-    # LocationStateStore → ScoringFilter → on_batch → supervisor_graph.invoke()
-    #
-    # The event loop polls the store, checks for triggered locations,
-    # and invokes the supervisor when risk conditions are met.
-    #
-    # make_supervisor_callback() returns a closure that captures the graph
-    # and the results accumulator.  The EventLoop never sees the graph —
-    # it just calls on_batch(batch).
-    supervisor_results: list[tuple[int, dict]] = []
-    on_batch = make_supervisor_callback(supervisor_graph, supervisor_results)
-    event_loop = build_event_loop(location_store, on_batch)
-
-    # ── STEP 7: Run pipeline and event loop concurrently ─────────────────────
-    #
-    # The pipeline produces data.  The event loop consumes it.
-    # They share the location_store — that's the only coupling.
-    # run_pipeline_with_event_loop handles lifecycle, cancellation,
-    # and a final drain pass.
-    await run_pipeline_with_event_loop(pipeline, event_loop, num_ticks=20)
-
-    supervisor_result = supervisor_results[-1][1] if supervisor_results else {}
-
-    # ── STEP 8: Print results ────────────────────────────────────────────────
-
-    print()
-    print("=" * 65)
-    print("Pipeline complete")
-    print(f"  World ticks:        {engine.current_tick}")
-    print(f"  Supervisor calls:   {len(supervisor_results)}")
-    print(f"  Invocation ticks:   {[t for t, _ in supervisor_results]}")
-    print(f"  Event loop cycles:  {event_loop.cycles_completed}")
-    print(f"  Locations in store: {location_store.get_all_location_ids()}")
-    print("=" * 65)
-
-    # Ground truth
-    burning = [
-        (row, col)
-        for row in range(engine.grid.rows)
-        for col in range(engine.grid.cols)
-        if engine.grid.get_cell(row, col).cell_state.fire_state == FireState.BURNING
-    ]
-    burned = [
-        (row, col)
-        for row in range(engine.grid.rows)
-        for col in range(engine.grid.cols)
-        if engine.grid.get_cell(row, col).cell_state.fire_state == FireState.BURNED
-    ]
-
-    print("GROUND TRUTH (world engine — agents never see this)")
-    print(f"  Currently burning: {len(burning)} cells  {burning}")
-    print(f"  Burned out:        {len(burned)} cells")
-    print(f"  Total affected:    {len(burning) + len(burned)} cells")
-    print()
-
-    print("--- World state after pipeline ---")
-    render_grid(engine, inventory=sensor_inventory)
-
-    # Agent findings
-    findings = supervisor_result.get("cluster_findings", [])
-    print("AGENT FINDINGS")
-    if not findings:
-        print("  No anomalies detected.")
-    else:
-        for finding in findings:
-            print(f"  [{finding['cluster_id']:15s}] {finding['anomaly_type']:20s} conf={finding['confidence']:.2f}")
-            print(f"    {finding['summary']}")
-            print(f"    Sensors: {finding['affected_sensors']}")
-
-    # Cross-agent store
-    print()
-    print("CROSS-AGENT STORE CONTENTS")
-    for cluster_id in ["cluster-north", "cluster-south"]:
-        items = agent_store.search(("incidents", cluster_id))
-        print(f"  ('incidents', '{cluster_id}')  →  {len(items)} item(s)")
-        for item in items:
-            value = item.value
-            print(
-                f"    [{item.key[:8]}]  {value.get('anomaly_type'):20s}  "
-                f"conf={value.get('confidence', 0):.2f}  {value.get('summary', '')[:50]}"
-            )
-
-    # Supervisor result
-    print()
-    print("SUPERVISOR RESULT")
-    print(f"  Status:   {supervisor_result.get('status', 'n/a')}")
-    print(f"  Summary:  {supervisor_result.get('situation_summary', 'none')}")
-    print()
-
-    commands = supervisor_result.get("pending_commands", [])
-    print(f"  Commands issued: {len(commands)}")
-    for cmd in commands:
-        print(f"    [{cmd.priority}] {cmd.command_type:12s} cluster={cmd.cluster_id}")
-        print(f"         payload: {cmd.payload}")
-
-    # Preparedness evaluation
-    print_preparedness_report(location_store, resource_inventory)
-
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # ENTRY POINT
@@ -279,3 +278,5 @@ async def main():
 
 if __name__ == "__main__":
     asyncio.run(main())
+
+

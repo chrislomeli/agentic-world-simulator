@@ -27,17 +27,51 @@ Deployment modes
 
 from __future__ import annotations
 
+import dataclasses
 import os
 from functools import lru_cache
+from typing import Optional
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from enum import Enum
+
+class LLMProvider(Enum):
+    STUB = "STUB"
+    ANTHROPIC = "ANTHROPIC"
+    OPENAI = "OPENAI"
+
+class LLMLabel(Enum):
+    HAIKU = "haiku"
+    SONNET = "sonnet"
+    GPT_MINI = "gpt-mini"
+    GPT_NANO = "gpt-nano"
+    GPT = "gpt"
+    STUB = "STUB"
+
+@dataclasses.dataclass
+class LLMModel:
+    model: str
+    key_label: str
+    provider: LLMProvider
+    api_key: Optional[str] = None
 
 
 class Settings(BaseSettings):
     # ── LLM credentials ───────────────────────────────────────────────────────
-    llm: str | None = None
+    llm_source: LLMProvider = LLMProvider.STUB
+    llm_model: Optional[LLMModel] = None
     anthropic_api_key: str = ""
     openai_api_key: str = ""
+    world_data: str = "src/domains/wildfire/scenario_data/north_south_fire.json"
+
+    @property
+    def selected_model(self) -> Optional[LLMModel]:
+        if self.llm_model is None:
+            return None
+        connection = dataclasses.replace(self.llm_model)
+        connection.api_key = getattr(self, connection.key_label, "") or None
+        return connection
 
     # ── LangSmith / LangChain tracing ─────────────────────────────────────────
     # pydantic-settings reads LANGCHAIN_API_KEY, LANGCHAIN_TRACING_V2, etc.
@@ -46,15 +80,6 @@ class Settings(BaseSettings):
     langchain_tracing_v2: bool = False
     langchain_project: str = "ogar"
     langchain_endpoint: str = "https://api.smith.langchain.com"
-
-    # ── Transport ─────────────────────────────────────────────────────────────
-    # Defaults point at local dev instances; override in K8s via env vars.
-    kafka_bootstrap_servers: str = "localhost:9092"
-    temporal_host: str = "localhost:7233"
-    world_data: str = "src/domains/wildfire/scenario_data/north_south_fire.json"
-
-    # ── Database (future — Postgres checkpointer / pgvector) ─────────────────
-    database_url: str = ""
 
     model_config = SettingsConfigDict(
         # AI_ENV_FILE=/path/to/.env for local dev.
@@ -99,3 +124,5 @@ def get_settings() -> Settings:
     so a fresh Settings object is created.
     """
     return Settings()
+
+

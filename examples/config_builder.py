@@ -13,32 +13,48 @@ the settings load without errors.
 import asyncio
 import logging
 import os
-import random
+from typing import Dict
 
-import langsmith
-from langgraph.store.memory import InMemoryStore
+from config import get_settings, Settings, LLMLabel, LLMModel, LLMProvider
 
-from agents.supervisor.graph import build_supervisor_graph
-from bridge.consumer import EventBridgeConsumer
-from config import get_settings, Settings
-from domains.wildfire.sampler import sample_local_conditions
-from domains.wildfire.scenario_loader import load_scenario_from_json
-from domains.wildfire.scenarios import create_basic_wildfire
-from domains.wildfire.sensors import (
-    HumiditySensor,
-    SmokeSensor,
-    TemperatureSensor,
-    WindSensor,
-)
-from sensors import SensorPublisher
-from transport import SensorEventQueue
-from world.grid import FireState, TerrainType
-from world.sensor_inventory import SensorInventory
+models: Dict[LLMLabel, LLMModel|None] = {
+    LLMLabel.HAIKU: LLMModel(key_label="anthropic_api_key", provider=LLMProvider.ANTHROPIC, model="claude-haiku-4-5-20251001"),
+    LLMLabel.SONNET: LLMModel(key_label="anthropic_api_key", provider=LLMProvider.ANTHROPIC, model="claude-sonnet-4-6"),
+    LLMLabel.GPT_MINI: LLMModel(key_label="openai_api_key", provider=LLMProvider.OPENAI, model="gpt-5.4-mini"),
+    LLMLabel.GPT_NANO: LLMModel(key_label="openai_api_key", provider=LLMProvider.OPENAI, model="gpt-5.4-nano"),
+    LLMLabel.GPT: LLMModel(key_label="openai_api_key", provider=LLMProvider.OPENAI, model="gpt-5.4"),
+    LLMLabel.STUB: None
+}
+
+
+def _mask_secret(value: str) -> str:
+    if not value:
+        return ""
+    if len(value) <= 8:
+        return "***"
+    return f"{value[:4]}...{value[-4:]}"
+
+
+def _redacted_settings_json(settings: Settings) -> str:
+    payload = settings.model_dump(mode="json")
+    for key in ("anthropic_api_key", "openai_api_key", "langchain_api_key"):
+        if key in payload:
+            payload[key] = _mask_secret(payload.get(key, ""))
+    llm_model = payload.get("llm_model")
+    if isinstance(llm_model, dict) and "api_key" in llm_model:
+        llm_model["api_key"] = _mask_secret(llm_model.get("api_key") or "")
+    import json
+    return json.dumps(payload, indent=2)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SECTION 1: SETUP & CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════════
+literals = {
+    "AI_ENV_FILE": "/Users/chrislomeli/Source/SECRETS/.env",
+    "WORLD_DATA": "/Users/chrislomeli/Source/PROJECTS/agenticAI/agentic-world-simulator/src/domains/wildfire/scenario_data/north_south_fire.json",
+    "USE_MODEL": LLMLabel.STUB
+}
 
 def configure_environment() -> Settings:
     """
@@ -46,11 +62,14 @@ def configure_environment() -> Settings:
 
     Think of this as: "open the door, turn on the lights, get your tools ready"
     """
-    os.environ.setdefault("AI_ENV_FILE", "/Users/chrislomeli/Source/SECRETS/.env")
+    os.environ.setdefault("AI_ENV_FILE", literals["AI_ENV_FILE"])
     settings = get_settings()  # Load .env file (API keys, project names, etc.)
     settings.apply_langsmith()  # Enable LangSmith tracing for debugging agent calls
-    settings.world_data = "/Users/chrislomeli/Source/PROJECTS/agenticAI/agentic-world-simulator/src/domains/wildfire/scenario_data/north_south_fire.json"
-    settings.llm = None
+    settings.world_data = literals["WORLD_DATA"]
+    connection = models.get(literals["USE_MODEL"], models[LLMLabel.GPT_MINI])
+    settings.llm_model = connection
+    settings.llm_source = connection.provider if connection else LLMProvider.STUB
+
 
     # Set up Python logging so we can see what's happening
     logging.basicConfig(
@@ -62,8 +81,8 @@ def configure_environment() -> Settings:
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
 
-    # Print what we're using
-    print(settings.model_dump_json(indent=2))
+    # Print what we're using (redacted)
+    print(_redacted_settings_json(settings))
     return settings
 
 # ═══════════════════════════════════════════════════════════════════════════════

@@ -10,47 +10,50 @@ no API calls.  Useful for understanding the graph structure before adding a
 real LLM.
 """
 
-import asyncio
-
-from examples.config_builder import configure_environment
-from examples.event_loop_builder import (
-    build_event_loop,
-    make_supervisor_callback,
-    run_pipeline_with_event_loop,
-)
-from examples.pipeline_builder import build_pipeline
-from langgraph.store.memory import InMemoryStore
-
-from agents.supervisor.graph import build_supervisor_graph
-from domains.wildfire.scenario_loader import load_scenario_from_json
-from event_loop.sensor_filter import score_location
-from event_loop.store import InMemoryLocationStore
-from resources import evaluate_preparedness, severity_from_score
-from resources.inventory import ResourceInventory
-from world.grid import FireState, TerrainType
+from config import Settings, LLMProvider
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # SECTION 1: SETUP & CONFIGURATION
 # ═══════════════════════════════════════════════════════════════════════════════
+def get_openai_llm(model_name: str, openai_api_key: str):
+    # Option 2: Use OpenAI (requires OPENAI_API_KEY)
+    from langchain_openai import ChatOpenAI
+    llm = ChatOpenAI(model=model_name, temperature=0,
+                     api_key=openai_api_key)
+    return llm
 
-def select_llm(settings):
+def get_anthropic_llm(model_name: str, anthropic_api_key: str):
+    # Option 1: Use Claude (requires ANTHROPIC_API_KEY)
+    from langchain_anthropic import ChatAnthropic
+    llm = ChatAnthropic(model=model_name, temperature=0,
+                        api_key=anthropic_api_key)
+    return llm
+
+
+def select_llm(settings: Settings):
     """
     Choose which LLM to use (or run in STUB mode with no LLM).
 
     For learning, STUB mode is fine. To use a real LLM, uncomment one option.
     """
-    llm = None
+    model_cfg = settings.selected_model
+    if model_cfg is None or model_cfg.provider == LLMProvider.STUB:
+        print("Running in STUB mode")
+        return None, "STUB"
 
-    # Option 1: Use Claude (requires ANTHROPIC_API_KEY)
-    # from langchain_anthropic import ChatAnthropic
-    # llm = ChatAnthropic(model="claude-haiku-4-5-20251001", temperature=0,
-    #                     api_key=settings.anthropic_api_key)
+    if not model_cfg.api_key:
+        raise ValueError(
+            f"Missing API key for provider {model_cfg.provider.value}. "
+            f"Expected env var mapped to settings field '{model_cfg.key_label}'."
+        )
 
-    # Option 2: Use GPT-4 (requires OPENAI_API_KEY)
-    # from langchain_openai import ChatOpenAI
-    # llm = ChatOpenAI(model="gpt-4o-mini", temperature=0,
-    #                  api_key=settings.openai_api_key)
+    if model_cfg.provider == LLMProvider.ANTHROPIC:
+        llm = get_anthropic_llm(model_cfg.model, model_cfg.api_key)
+    elif model_cfg.provider == LLMProvider.OPENAI:
+        llm = get_openai_llm(model_cfg.model, model_cfg.api_key)
+    else:
+        llm = None
 
-    mode = "LLM" if llm else "STUB"
+    mode = "LLM" if llm is not None else "STUB"
     print(f"Running in {mode} mode")
     return llm, mode

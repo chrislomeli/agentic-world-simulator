@@ -12,6 +12,25 @@ wheels = [
 ]
 
 [[package]]
+name = "anthropic"
+version = "0.92.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "distro" },
+    { name = "docstring-parser" },
+    { name = "httpx" },
+    { name = "jiter" },
+    { name = "pydantic" },
+    { name = "sniffio" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/01/2d/fc5c5a369db977efbaa646d77ba42b38a6de4e95789884032b0e2e3fc834/anthropic-0.92.0.tar.gz", hash = "sha256:d1e792ed0692379452a1af6b266df495e973c3695cd0aace2a108b838393cbc4", size = 652420, upload-time = "2026-04-08T16:55:35.37Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c3/21/bf5b5ab10b6932c5c43eaa66b6e3f256de569cf0323d89f9cc281a0d0f39/anthropic-0.92.0-py3-none-any.whl", hash = "sha256:f92a4bd065d5cab90a96b65bb44e473bf7c6fe731a743cd156e9ad1d245c381e", size = 621195, upload-time = "2026-04-08T16:55:33.639Z" },
+]
+
+[[package]]
 name = "anyio"
 version = "4.13.0"
 source = { registry = "https://pypi.org/simple" }
@@ -363,6 +382,15 @@ wheels = [
 ]
 
 [[package]]
+name = "docstring-parser"
+version = "0.17.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b2/9d/c3b43da9515bd270df0f80548d9944e389870713cc1fe2b8fb35fe2bcefd/docstring_parser-0.17.0.tar.gz", hash = "sha256:583de4a309722b3315439bb31d64ba3eebada841f2e2cee23b99df001434c912", size = 27442, upload-time = "2025-07-21T07:35:01.868Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/55/e2/2537ebcff11c1ee1ff17d8d0b6f4db75873e3b0fb32c2d4a2ee31ecb310a/docstring_parser-0.17.0-py3-none-any.whl", hash = "sha256:cf2569abd23dce8099b300f9b4fa8191e9582dda731fd533daf54c4551658708", size = 36896, upload-time = "2025-07-21T07:35:00.684Z" },
+]
+
+[[package]]
 name = "fastjsonschema"
 version = "2.21.2"
 source = { registry = "https://pypi.org/simple" }
@@ -607,6 +635,20 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/90/51/9187be60d989df97f5f0aba133fa54e7300f17616e065d1ada7d7646b6d6/jupyterlab_pygments-0.3.0.tar.gz", hash = "sha256:721aca4d9029252b11cfa9d185e5b5af4d54772bb8072f9b7036f4170054d35d", size = 512900, upload-time = "2023-11-23T09:26:37.44Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b1/dd/ead9d8ea85bf202d90cc513b533f9c363121c7792674f78e0d8a854b63b4/jupyterlab_pygments-0.3.0-py3-none-any.whl", hash = "sha256:841a89020971da1d8693f1a99997aefc5dc424bb1b251fd6322462a1b8842780", size = 15884, upload-time = "2023-11-23T09:26:34.325Z" },
+]
+
+[[package]]
+name = "langchain-anthropic"
+version = "1.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anthropic" },
+    { name = "langchain-core" },
+    { name = "pydantic" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/98/c7/259d4d805c6ac90c8695714fc15498a4557bb515eb24f692fd611966e383/langchain_anthropic-1.4.0.tar.gz", hash = "sha256:bbf64e99f9149a34ba67813e9582b2160a0968de9e9f54f7ba8d1658f253c2e5", size = 674360, upload-time = "2026-03-17T18:42:20.751Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2e/c0/77f99373276d4f06c38a887ef6023f101cfc7ba3b2bf9af37064cdbadde5/langchain_anthropic-1.4.0-py3-none-any.whl", hash = "sha256:c84f55722336935f7574d5771598e674f3959fdca0b51de14c9788dbf52761be", size = 48463, upload-time = "2026-03-17T18:42:19.742Z" },
 ]
 
 [[package]]
@@ -1893,7 +1935,9 @@ name = "world-simulator"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "langchain-anthropic" },
     { name = "langchain-core" },
+    { name = "langchain-openai" },
     { name = "langgraph" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -1915,7 +1959,9 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "langchain-anthropic", specifier = ">=1.4.0" },
     { name = "langchain-core", specifier = ">=0.3" },
+    { name = "langchain-openai", specifier = ">=1.1.12" },
     { name = "langchain-openai", marker = "extra == 'llm'", specifier = ">=0.2" },
     { name = "langgraph", specifier = ">=0.2" },
     { name = "pydantic", specifier = ">=2.0" },

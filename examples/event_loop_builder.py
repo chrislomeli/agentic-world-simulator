@@ -20,6 +20,7 @@ Three functions, three concerns:
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass, field
 from collections.abc import Callable
 from typing import Any
 
@@ -33,9 +34,29 @@ from event_loop.store import LocationStateStore
 
 # ── Callback factory ─────────────────────────────────────────────────────────
 
+
+@dataclass
+class SupervisorResultCollector:
+    records: list[tuple[int, dict]] = field(default_factory=list)
+
+    def record(self, cycle: int, result: dict) -> None:
+        self.records.append((cycle, result))
+
+    @property
+    def count(self) -> int:
+        return len(self.records)
+
+    @property
+    def invocation_ticks(self) -> list[int]:
+        return [cycle for cycle, _ in self.records]
+
+    @property
+    def last_result(self) -> dict:
+        return self.records[-1][1] if self.records else {}
+
 def make_supervisor_callback(
     supervisor_graph: CompiledStateGraph,
-    results: list[tuple[int, dict]],
+    collector: SupervisorResultCollector,
 ) -> Callable[[dict[str, Any]], None]:
     """
     Return an on_batch callback that invokes the supervisor graph.
@@ -43,8 +64,8 @@ def make_supervisor_callback(
     Parameters
     ──────────
     supervisor_graph : Compiled LangGraph supervisor graph.
-    results          : Accumulator list — each invocation appends
-                       (cycle, result_dict).  The caller owns this list
+    collector        : Result collector — each invocation records
+                       (cycle, result_dict).  The caller owns this object
                        and can inspect it after the run.
 
     The returned callback reads batch["cycle"] (stamped by EventLoop)
@@ -70,7 +91,7 @@ def make_supervisor_callback(
             },
             config={"run_name": f"supervisor-cycle-{cycle}"},
         )
-        results.append((cycle, result))
+        collector.record(cycle, result)
 
     return on_batch
 
