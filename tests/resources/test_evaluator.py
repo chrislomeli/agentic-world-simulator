@@ -29,7 +29,7 @@ def _truck(
 ) -> ResourceBase:
     return ResourceBase(
         resource_id=rid,
-        resource_type="firetruck",
+        resource_type="engine",
         cluster_id=cluster,
         grid_row=row,
         grid_col=col,
@@ -178,7 +178,7 @@ class TestEvaluatePreparedness:
             SeverityLevel.MODERATE, "cluster-north", inv,
             target_row=2, target_col=2,
         )
-        gap = next(g for g in result.gaps if g.requirement.resource_type == "firetruck")
+        gap = next(g for g in result.gaps if g.requirement.resource_type == "engine")
         assert gap.shortfall == 1
 
     def test_deployed_resources_not_counted(self):
@@ -225,7 +225,7 @@ class TestEvaluatePreparedness:
             minutes_per_cell=10.0,  # Slower travel
             sla_table={
                 SeverityLevel.LOW: [
-                    ResponseRequirement("firetruck", min_count=1, max_response_minutes=5.0),
+                    ResponseRequirement("engine", min_count=1, max_response_minutes=5.0),
                 ],
             },
         )
@@ -285,7 +285,7 @@ class TestResourceGap:
 
     def test_reason_insufficient_count(self):
         gap = ResourceGap(
-            requirement=ResponseRequirement("firetruck", 3, 15.0),
+            requirement=ResponseRequirement("engine", 3, 15.0),
             available_count=1,
             nearest_minutes=10.0,
         )
@@ -293,12 +293,12 @@ class TestResourceGap:
 
     def test_reason_too_far(self):
         gap = ResourceGap(
-            requirement=ResponseRequirement("firetruck", 1, 15.0),
+            requirement=ResponseRequirement("engine", 1, 15.0),
             available_count=0,
             nearest_minutes=40.0,
         )
-        # available_count is 0 (none within SLA), so it shows "no firetruck"
-        assert "no firetruck" in gap.reason
+        # available_count is 0 (none within SLA), so it shows "no engine"
+        assert "no engine" in gap.reason
 
     def test_shortfall(self):
         gap = ResourceGap(
@@ -323,7 +323,7 @@ class TestPreparednessResult:
         assert result.gap_ratio == 0.0
 
     def test_gap_ratio_half(self):
-        req = ResponseRequirement("firetruck", 1, 30.0)
+        req = ResponseRequirement("engine", 1, 30.0)
         gap = ResourceGap(requirement=req, available_count=0, nearest_minutes=None)
         result = PreparednessResult(
             cluster_id="c1",

@@ -90,19 +90,19 @@ class ResponseRequirement:
 
 DEFAULT_SLA: dict[SeverityLevel, list[ResponseRequirement]] = {
     SeverityLevel.LOW: [
-        ResponseRequirement("firetruck", min_count=1, max_response_minutes=45.0),
+        ResponseRequirement("engine", min_count=1, max_response_minutes=45.0),
     ],
     SeverityLevel.MODERATE: [
-        ResponseRequirement("firetruck", min_count=2, max_response_minutes=30.0),
+        ResponseRequirement("engine", min_count=2, max_response_minutes=30.0),
         ResponseRequirement("crew", min_count=1, max_response_minutes=30.0),
     ],
     SeverityLevel.HIGH: [
-        ResponseRequirement("firetruck", min_count=2, max_response_minutes=15.0),
+        ResponseRequirement("engine", min_count=2, max_response_minutes=15.0),
         ResponseRequirement("helicopter", min_count=1, max_response_minutes=30.0),
         ResponseRequirement("crew", min_count=2, max_response_minutes=20.0),
     ],
     SeverityLevel.EXTREME: [
-        ResponseRequirement("firetruck", min_count=3, max_response_minutes=10.0),
+        ResponseRequirement("engine", min_count=3, max_response_minutes=10.0),
         ResponseRequirement("helicopter", min_count=2, max_response_minutes=20.0),
         ResponseRequirement("crew", min_count=3, max_response_minutes=15.0),
         ResponseRequirement("ambulance", min_count=1, max_response_minutes=20.0),

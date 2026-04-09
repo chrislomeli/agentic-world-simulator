@@ -104,6 +104,38 @@ Your job is to assess the overall situation by:
   3. Distinguishing real threats from noise
   4. Writing a concise situation summary
 
+DOMAIN RULES — use these to assess severity and risk:
+
+  Fire behavior:
+  - Fire spreads fastest DOWNWIND. The head of the fire (downwind side) is
+    the most dangerous and hardest to suppress.
+  - Fire travels faster UPHILL. Slope > 20° can double the rate of spread.
+  - Terrain flammability: Forest > Scrub > Grassland. Rock and Water do
+    not burn and act as natural firebreaks.
+  - Fuel moisture below 8% dramatically increases spread rate and ignition risk.
+
+  Firebreaks and barriers:
+  - Rock ridges and water bodies are natural firebreaks — fire is unlikely
+    to cross them UNLESS wind exceeds 15 m/s, which enables ember spotting
+    (burning embers carried over the barrier by wind).
+  - A scrub gap in a rock ridge is a weak point — fire can funnel through it.
+
+  Urban exposure:
+  - Urban areas DOWNWIND of an active fire have HIGH loss potential.
+    Always flag this as elevated severity even if the fire is currently distant.
+  - Urban areas upwind or behind a firebreak are lower priority.
+
+  Sensor coverage:
+  - If sensor coverage quality is reported as SPARSE or INSUFFICIENT for
+    a cluster, treat that cluster's findings as LOWER confidence — the data
+    may not reflect actual conditions across the full area.
+  - Good coverage with converging readings is the highest-confidence signal.
+
+  Cross-cluster correlation:
+  - The same anomaly type reported by multiple clusters is a correlated
+    event and usually indicates a real large-scale condition (weather front,
+    widespread fire), not a localized sensor fault.
+
 After your analysis, respond with a JSON object (and nothing else):
 {{
   "severity": "critical" | "high" | "moderate" | "low" | "none",
@@ -125,6 +157,39 @@ Available command types:
   - "escalate": Escalate to higher authority (payload: {{"reason": "...", "urgency": "high"|"medium"}})
   - "suppress": Suppress a known false positive (payload: {{"finding_ids": [...], "reason": "..."}})
   - "drone_task": Deploy a drone for closer inspection (payload: {{"target_cluster": "...", "task": "inspect"|"monitor"}})
+
+DECISION RULES — use these to guide your command choices:
+
+  When to escalate:
+  - Resources cannot reach the fire within SLA response times → escalate
+    with urgency "high" so mutual aid can be requested.
+  - Urban areas are directly threatened → escalate regardless of resource
+    availability (life safety takes priority).
+  - Multiple clusters report correlated fire events → escalate as this
+    suggests a large-scale incident beyond single-cluster response.
+
+  When to alert:
+  - Any confirmed fire detection with high confidence → alert operators
+    with the affected cluster and severity.
+  - Resource posture is DEGRADED or worse → include the specific gaps
+    in the alert message.
+
+  When to deploy drones:
+  - Sensor coverage is SPARSE or INSUFFICIENT for a cluster → deploy
+    a drone to "inspect" for ground truth in the coverage gap.
+  - A finding has moderate confidence (0.4–0.7) and needs verification
+    → deploy a drone to "inspect" before committing resources.
+
+  When to suppress:
+  - A finding is clearly a sensor fault (single sensor, no corroboration,
+    known noisy sensor) → suppress to avoid alert fatigue.
+
+  Priority guidance (1 = highest):
+  - 1: Life safety — urban exposure, civilian evacuation needed
+  - 2: Active fire confirmed, resources needed immediately
+  - 3: Fire weather conditions detected, no active fire yet
+  - 4: Monitoring / inspection tasks
+  - 5: Suppression of known false positives
 
 Use the available tools to review findings before deciding.
 
@@ -283,6 +348,7 @@ def _make_assess_llm_node(
     store: BaseStore | None = None,
     resource_inventory: ResourceInventory | None = None,
     fire_behavior_summary: dict | None = None,
+    coverage_summaries: list[str] | None = None,
 ):
     """
     Factory that returns an assess_situation node backed by an LLM.
@@ -350,6 +416,11 @@ def _make_assess_llm_node(
             )
             if past_lines:
                 user_content += "\n\nPast incidents (from store):\n" + "\n".join(past_lines)
+
+            if coverage_summaries:
+                user_content += "\n\nSensor coverage quality:\n" + "\n".join(
+                    f"  {s}" for s in coverage_summaries
+                )
 
             user_msg = HumanMessage(content=user_content)
             messages = [sys_msg, user_msg]
@@ -614,6 +685,7 @@ def build_supervisor_graph(
     store: BaseStore | None = None,
     resource_inventory: ResourceInventory | None = None,
     fire_behavior_summary: dict | None = None,
+    coverage_summaries: list[str] | None = None,
 ):
     """
     Compile and return the supervisor graph.
@@ -663,6 +735,7 @@ def build_supervisor_graph(
             llm_with_tools, store=store,
             resource_inventory=resource_inventory,
             fire_behavior_summary=fire_behavior_summary,
+            coverage_summaries=coverage_summaries,
         ))
         builder.add_node("assess_tool_node", ToolNode(all_tools))
         builder.add_node("parse_assessment", _parse_assessment)

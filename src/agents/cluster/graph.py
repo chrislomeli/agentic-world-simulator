@@ -64,6 +64,29 @@ Use the available tools to inspect the data:
   - check_threshold: test specific readings against thresholds
   - get_cluster_status: see cluster metadata
 
+DOMAIN RULES — use these to guide your classification:
+
+  Evidence strength:
+  - Convergent evidence is the strongest signal: temperature > 38°C AND
+    humidity < 15% AND wind > 10 m/s together indicate extreme fire weather.
+    Any single elevated reading alone could be sensor noise.
+  - A single spike in one sensor type with no corroboration from other
+    types is more likely a sensor fault than a real event.
+  - Smoke detection near known burning cells is expected, not anomalous.
+    Only flag smoke where no fire is known.
+
+  Dangerous conditions:
+  - Temperature > 38°C is elevated fire danger.
+  - Humidity < 15% is extreme dryness — fuels ignite easily.
+  - Wind > 10 m/s enables rapid fire spread.
+  - All three together constitute "critical fire weather."
+  - Fuel moisture < 8% is the strongest ignition predictor.
+
+  Confidence calibration:
+  - 3+ sensor types corroborating → confidence 0.8–1.0
+  - 2 sensor types corroborating  → confidence 0.5–0.8
+  - 1 sensor type elevated alone  → confidence 0.2–0.4 (possible fault)
+
 After your analysis, respond with a JSON object (and nothing else):
 {{
   "anomaly_detected": true/false,
