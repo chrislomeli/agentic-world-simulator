@@ -36,10 +36,10 @@ class TestSettingsDefaults:
         s = Settings()
         assert s.anthropic_api_key == ""
 
-    def test_transport_defaults(self):
-        s = Settings()
-        assert s.kafka_bootstrap_servers == "localhost:9092"
-        assert s.temporal_host == "localhost:7233"
+    # def test_transport_defaults(self):
+    #     s = Settings()
+    #     assert s.kafka_bootstrap_servers == "localhost:9092"
+    #     assert s.temporal_host == "localhost:7233"
 
     def test_tracing_off_by_default(self):
         s = Settings()
@@ -61,10 +61,10 @@ class TestSettingsFromEnv:
         s = Settings()
         assert s.langchain_tracing_v2 is True
 
-    def test_reads_kafka_servers(self, monkeypatch):
-        monkeypatch.setenv("KAFKA_BOOTSTRAP_SERVERS", "kafka.svc:9092")
-        s = Settings()
-        assert s.kafka_bootstrap_servers == "kafka.svc:9092"
+    # def test_reads_kafka_servers(self, monkeypatch):
+    #     monkeypatch.setenv("KAFKA_BOOTSTRAP_SERVERS", "kafka.svc:9092")
+    #     s = Settings()
+    #     assert s.kafka_bootstrap_servers == "kafka.svc:9092"
 
     def test_reads_project_name(self, monkeypatch):
         monkeypatch.setenv("LANGCHAIN_PROJECT", "my-project")

@@ -35,6 +35,7 @@ from examples.event_loop_builder import (
     run_pipeline_with_event_loop,
 )
 from examples.pipeline_builder import build_pipeline
+from examples.render import render_grid
 from langgraph.store.memory import InMemoryStore
 
 from agents.supervisor.graph import build_supervisor_graph
@@ -43,10 +44,10 @@ from event_loop.sensor_filter import score_location
 from event_loop.store import InMemoryLocationStore
 from resources import evaluate_preparedness, severity_from_score
 from resources.inventory import ResourceInventory
-from world.grid import FireState, TerrainType
+from world.grid import FireState
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SECTION 3: MAIN PIPELINE
+# SECTION 2: MAIN PIPELINE
 # ═══════════════════════════════════════════════════════════════════════════════
 
 async def main():
@@ -138,7 +139,7 @@ async def main():
     print()
 
     print("--- World state after pipeline ---")
-    render_grid(engine, inventory=sensor_inventory)
+    render_grid(engine, sensor_inventory=sensor_inventory, resource_inventory=resource_inventory)
 
     # Agent findings
     findings = supervisor_result.get("cluster_findings", [])
@@ -182,62 +183,7 @@ async def main():
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# SECTION 1: WORLD VISUALIZATION
-# ═══════════════════════════════════════════════════════════════════════════════
-
-def render_grid(engine, inventory=None, layers=None):
-    """
-    Draw the world as ASCII art so we can see what's happening.
-
-    Legend:
-        T = Forest  . = Grass  # = Rock  ~ = Water  s = Scrub  U = Urban
-        F = Burning  * = Burned
-        Sensors: t=temp  k=smoke  h=humidity  w=wind  b=barometric  c=camera  +=overlap
-    """
-    terrain = {
-        TerrainType.FOREST: "T", TerrainType.GRASSLAND: ".",
-        TerrainType.ROCK: "#", TerrainType.WATER: "~",
-        TerrainType.SCRUB: "s", TerrainType.URBAN: "U",
-    }
-    sensor_glyph = {
-        "temperature": "t", "smoke": "k", "humidity": "h",
-        "wind": "w", "barometric_pressure": "b", "thermal_camera": "c",
-    }
-
-    sensor_positions = {}
-    if inventory is not None:
-        show_types = set(layers) if layers else inventory.layer_types()
-        for stype in show_types:
-            for pos in inventory.layer_positions(stype):
-                rc = (pos[0], pos[1])
-                if rc in sensor_positions:
-                    sensor_positions[rc] = "+"
-                else:
-                    sensor_positions[rc] = sensor_glyph.get(stype, "?")
-
-    print("  " + " ".join(str(col) for col in range(engine.grid.cols)))
-    for row_idx in range(engine.grid.rows):
-        row = []
-        for col_idx in range(engine.grid.cols):
-            cell = engine.grid.get_cell(row_idx, col_idx)
-            state = cell.cell_state
-            if state.fire_state == FireState.BURNING:
-                glyph = "F"
-            elif state.fire_state == FireState.BURNED:
-                glyph = "*"
-            elif (row_idx, col_idx) in sensor_positions:
-                glyph = sensor_positions[(row_idx, col_idx)]
-            else:
-                glyph = terrain.get(state.terrain_type, "?")
-            row.append(glyph)
-        print(f"{row_idx} {' '.join(row)}")
-    print()
-    print("Legend: T=Forest  .=Grass  #=Rock  ~=Water  s=Scrub  U=Urban  F=Burning  *=Burned")
-    print("Sensors: t=temp  k=smoke  h=humidity  w=wind  b=barometric  c=camera  +=overlap")
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# SECTION 2: PREPAREDNESS REPORT
+# SECTION 1: PREPAREDNESS REPORT
 # ═══════════════════════════════════════════════════════════════════════════════
 
 def print_preparedness_report(
