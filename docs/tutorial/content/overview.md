@@ -1,5 +1,25 @@
 # Tutorial Playlist — Build-and-Run Sessions
 
+## How to use this tutorial
+
+> **Ground rules for building from scratch.** Follow these to avoid getting stuck.
+
+1. **Do the sessions in order.** Each session depends on the previous one. Skipping ahead will cause import errors because the dependencies don't exist yet.
+
+2. **Type the code, don't copy-paste.** The point is to build muscle memory for LangGraph patterns. When you type `Annotated[List[SensorEvent], append_events]` yourself, you understand what it does. When you paste it, you skip over it.
+
+3. **Run the checkpoint test after every session.** Each session ends with a `pytest` command. If it fails, fix it before moving on. The next session assumes the previous one passes.
+
+4. **Read the Concept Boxes first.** Sessions that introduce new LangGraph primitives (Sessions 02, 03, 05, 06) have a "Concept Box" section near the top. Read it before writing code — it explains the mechanical contract so you know *what* you're typing and *why*.
+
+5. **Use the "What can go wrong" tables.** Every Concept Box has a troubleshooting table. When something breaks (it will), check the table before debugging from scratch.
+
+6. **Session 01 is copy-in, not build.** The infrastructure (world engine, sensors, transport) is not the learning target. Session 01 copies it in so you can focus on agent code starting in Session 02.
+
+7. **Stub first, LLM second.** Sessions 02 and 05 build stub agents (no LLM). Sessions 03 and 06 add the LLM. This separation means you can debug graph wiring without worrying about LLM behavior, and debug LLM behavior without worrying about graph wiring.
+
+---
+
 ## Philosophy
 
 Each session builds **one runnable thing**. You can stop after any session and have working code. Later sessions add capabilities without breaking earlier ones.

@@ -56,6 +56,54 @@ pytest tests/agents/test_cluster.py tests/tools/ -v
 
 ---
 
+## Concept Box: What are ToolNode and ReAct?
+
+> **Read this before the code.** These are the two new LangGraph primitives this session introduces. If you understand the mechanical contract here, the code will make sense on first read.
+
+### ToolNode — the mechanical contract
+
+A `ToolNode` is a LangGraph node that **executes tool calls from an AIMessage and returns ToolMessages**. That's all it does. The contract is:
+
+1. **Input:** The ToolNode reads the `messages` field from state. It looks at the **last message**. That message must be an `AIMessage` with a `tool_calls` attribute.
+2. **Execution:** For each tool call, the ToolNode calls the matching Python function with the provided arguments.
+3. **Output:** The ToolNode wraps each result in a `ToolMessage` and returns `{"messages": [tool_msg_1, tool_msg_2, ...]}`. The `add_messages` reducer appends these to the conversation.
+
+You create one by passing your list of tools:
+
+```python
+from langgraph.prebuilt import ToolNode
+builder.add_node("tool_node", ToolNode(SENSOR_TOOLS))
+```
+
+The ToolNode **never calls the LLM**. It only calls Python functions. The LLM decides *which* tools to call; the ToolNode *executes* them.
+
+### ReAct loop — the pattern
+
+ReAct (**Re**asoning + **Act**ing) is a cycle between an LLM node and a ToolNode:
+
+```
+LLM node → produces AIMessage
+  ├── AIMessage has tool_calls? → ToolNode executes them → back to LLM node
+  └── AIMessage has text content? → exit the loop (LLM is done)
+```
+
+A **conditional edge** after the LLM node checks `last_message.tool_calls`:
+- **Has tool calls** → route to ToolNode (loop continues)
+- **No tool calls** → route to the next node (loop exits)
+
+The LLM controls how many iterations happen. It calls tools until it has enough information, then produces a final text answer. Typical iteration count: 2–4 tool calls before the LLM is satisfied.
+
+### What can go wrong
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `ToolNode` raises "no tool calls found" | Router sent a non-tool-call message to ToolNode | Check your conditional edge — only route to ToolNode when `tool_calls` is present |
+| LLM never calls tools | Tools aren't bound | Verify you called `llm.bind_tools(SENSOR_TOOLS)` before creating the node |
+| LLM loops forever | No exit condition | The conditional edge must have a path that exits when there are no tool_calls |
+| Tool returns empty/error | State holder not set | Verify `set_tool_state()` is called before the LLM invocation |
+
+---
+
 ## Why tools matter
 
 An LLM without tools can only reason about what you put in the prompt. For the cluster agent, that would mean dumping all sensor events into the prompt as text and asking the LLM to classify them. That works for small batches, but it doesn't scale:

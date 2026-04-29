@@ -66,6 +66,77 @@ pytest tests/agents/test_cluster.py -v
 
 ---
 
+## Concept Box: LangGraph fundamentals
+
+> **Read this before the code.** This is your first LangGraph session. These four concepts are all you need to understand to write the code below.
+
+### 1. StateGraph — the container
+
+A `StateGraph` is a directed graph where **state** (a dict) flows from node to node. You create one with a state schema (a TypedDict), add nodes and edges, then `compile()` it into a runnable graph.
+
+```python
+from langgraph.graph import StateGraph, START, END
+
+builder = StateGraph(MyState)
+builder.add_node("step_a", my_function_a)
+builder.add_node("step_b", my_function_b)
+builder.add_edge(START, "step_a")
+builder.add_edge("step_a", "step_b")
+builder.add_edge("step_b", END)
+graph = builder.compile()
+
+result = graph.invoke({"field_1": "value", "field_2": []})
+```
+
+### 2. TypedDict state — the data contract
+
+The state schema is a Python `TypedDict`. It defines **what fields exist** and **what types they have**. Every node receives the full state and returns a partial dict of only the fields it changed.
+
+```python
+class MyState(TypedDict):
+    name: str
+    items: List[str]
+    status: str
+
+# A node that only changes status:
+def my_node(state: MyState) -> dict:
+    return {"status": "done"}  # Only return what changed
+```
+
+### 3. Reducers — how fields merge
+
+By default, returning `{"items": ["new"]}` **overwrites** the `items` field. If you want to **append** instead, you annotate the field with a reducer:
+
+```python
+from typing import Annotated
+from operator import add
+
+class MyState(TypedDict):
+    items: Annotated[List[str], add]  # add = list concatenation
+```
+
+Now `return {"items": ["new"]}` **appends** `"new"` to the existing list. LangGraph calls `add(existing_items, ["new"])` behind the scenes.
+
+You can write custom reducers for more complex merge logic (deduplication, capped windows, etc.).
+
+### 4. Edges — wiring nodes together
+
+- **Normal edge:** `add_edge("a", "b")` — always go from a to b
+- **Conditional edge:** `add_conditional_edges("a", router_fn)` — the router function reads state and returns the name of the next node
+- `START` — the entry point of the graph
+- `END` — the exit point of the graph
+
+### What can go wrong
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `KeyError: 'field_name'` at invoke time | Initial state dict is missing a required field | Pass all fields in the `graph.invoke({...})` call |
+| Node return value ignored | Returned a field not in the TypedDict | Only return fields that are declared in the state schema |
+| List field gets overwritten instead of appended | No reducer annotation | Add `Annotated[List[...], my_reducer]` to the field |
+| Graph runs forever | Conditional edge never routes to END | Ensure every path eventually reaches END |
+
+---
+
 ## File 1: `src/agents/cluster/state.py`
 
 This file defines the data that flows through the cluster agent graph. Every node reads from it and writes partial updates back to it.

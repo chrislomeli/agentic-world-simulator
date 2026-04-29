@@ -59,6 +59,66 @@ pytest tests/agents/test_supervisor.py -v
 
 ---
 
+## Concept Box: The Send API
+
+> **Read this before the code.** The Send API is the key new LangGraph primitive this session introduces. It enables dynamic parallel execution — something you can't do with regular edges.
+
+### What Send does mechanically
+
+A normal node returns a `dict` (partial state update). A Send-based function returns a `List[Send]` instead. Each `Send` object is an instruction: "run this node with this input."
+
+```python
+from langgraph.graph import Send
+
+def fan_out(state) -> List[Send]:
+    return [
+        Send("target_node", {"key": "value_1"}),
+        Send("target_node", {"key": "value_2"}),
+        Send("target_node", {"key": "value_3"}),
+    ]
+```
+
+LangGraph receives the list and:
+1. **Invokes the target node once per Send**, in parallel
+2. Each invocation gets its **own isolated copy** of the input dict — no state collision
+3. When **all** invocations complete (sync barrier), their return values are **merged via reducers** into the parent state
+4. Execution continues to the next node only after all Sends finish
+
+### How it wires into the graph
+
+Send functions are wired as **conditional edges**, not as regular nodes:
+
+```python
+builder.add_conditional_edges(START, fan_out_to_clusters)
+```
+
+LangGraph sees the `List[Send]` return type and treats it as dynamic fan-out instead of a routing decision.
+
+### The sync barrier
+
+This is the key thing to understand: after all Send targets complete, **the reducer merges their results**, then the **next normal edge** fires. You don't write any join/gather logic — LangGraph does it automatically.
+
+```
+fan_out → [Send A, Send B, Send C]
+              ↓         ↓         ↓
+          target_node  target_node  target_node   (parallel)
+              ↓         ↓         ↓
+           reducer merges all results              (automatic)
+              ↓
+          next_node                                 (sequential)
+```
+
+### What can go wrong
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| `KeyError` in target node | Send input dict is missing required fields | Every field in the target's TypedDict must be present in the Send input — including optional fields (set them to `None` or `[]`) |
+| Results overwrite instead of merge | No reducer on the output field | Use `Annotated[List[...], my_reducer]` on the field that collects parallel results |
+| Only one Send runs | `active_cluster_ids` has one item | Not a bug — dynamic fan-out scales to N, including N=1 |
+| Graph hangs | One Send target raises an exception | Add error handling inside the target node so it returns error status instead of raising |
+
+---
+
 ## Why a supervisor matters
 
 Sessions 06–08 gave you cluster agents. Each cluster agent sees sensor events from its own cluster and produces findings: "temperature spike in cluster-north", "smoke detected in cluster-south". But cluster agents don't talk to each other. They don't know what's happening in other clusters.

@@ -59,6 +59,74 @@ pytest tests/agents/test_supervisor.py tests/tools/ -v
 
 ---
 
+## Concept Box: Dual ReAct loops and tool state lifecycle
+
+> **Read this before the code.** This session has two ReAct loops in the same graph. Understanding the wiring and the tool state lifecycle prevents the most common bugs.
+
+### Why two loops, not one
+
+A single ReAct loop trying to both assess *and* decide tends to collapse the phases: the LLM starts deciding before it finishes assessing. Two focused loops produce better results because each has a **different system prompt, different mental frame, and different output schema**.
+
+```
+START → fan_out → run_cluster_agent (×N)
+         ↓
+    assess_situation_llm ←──→ assess_tool_node    (loop 1: "what is happening?")
+         ↓
+    parse_assessment
+         ↓
+    decide_actions_llm ←──→ decide_tool_node      (loop 2: "what should we do?")
+         ↓
+    parse_commands → dispatch_commands → END
+```
+
+Both loops share the **same ToolNode tool set** but have **different system prompts**. The assess loop's prompt says "examine findings, produce a summary." The decide loop's prompt says "given the summary, produce commands."
+
+### Tool state lifecycle
+
+The supervisor tools read from a module-level `_state` holder (same pattern as sensor tools in Session 03). The lifecycle matters:
+
+1. **Before assess loop:** `set_supervisor_tool_state(findings, cluster_ids, ...)` loads all findings into the holder
+2. **During assess loop:** tools read from `_state` — `get_all_findings()`, `check_cross_cluster()`, etc.
+3. **Between loops:** tool state stays loaded (tools are still valid for the decide phase)
+4. **After decide loop:** `clear_supervisor_tool_state()` cleans up
+
+If you forget step 1, all tools return empty results. If you clear too early (between loops), the decide phase has no data.
+
+### How the graph builder wires it
+
+```python
+# Assess phase
+builder.add_node("assess_situation", assess_llm_node)
+builder.add_node("assess_tool_node", ToolNode(all_tools))
+builder.add_node("parse_assessment", _parse_assessment)
+
+builder.add_conditional_edges("assess_situation", route_after_assess_llm)
+builder.add_edge("assess_tool_node", "assess_situation")  # assess loop
+builder.add_edge("parse_assessment", "decide_actions")
+
+# Decide phase
+builder.add_node("decide_actions", decide_llm_node)
+builder.add_node("decide_tool_node", ToolNode(all_tools))
+builder.add_node("parse_commands", _parse_commands)
+
+builder.add_conditional_edges("decide_actions", route_after_decide_llm)
+builder.add_edge("decide_tool_node", "decide_actions")   # decide loop
+builder.add_conditional_edges("parse_commands", route_after_decide)
+```
+
+**Note:** `assess_tool_node` and `decide_tool_node` are separate ToolNode instances with the same tool set. They need separate names because LangGraph requires unique node names.
+
+### What can go wrong
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| Assess tools return empty | `set_supervisor_tool_state()` not called | Call it in the assess LLM node before `llm.invoke()` |
+| Decide tools return empty | Tool state cleared between loops | Only call `clear_supervisor_tool_state()` in `_parse_commands`, not in `_parse_assessment` |
+| LLM produces assessment in decide phase | Messages carry over | The decide node checks `has_decide_prompt` and replaces messages with fresh system+user if needed |
+| Both loops use same system prompt | Copy-paste error | Assess uses `ASSESS_SYSTEM_PROMPT`, decide uses `DECIDE_SYSTEM_PROMPT` — different focus |
+
+---
+
 ## Why two separate loops
 
 The supervisor has two distinct responsibilities:
@@ -69,7 +137,7 @@ The supervisor has two distinct responsibilities:
 
 These are separate reasoning tasks with different tools and different outputs. The assess loop produces a `situation_summary` string. The decide loop produces a list of `ActuatorCommand` objects.
 
-Session 09 had two stub nodes (`assess_situation` and `decide_actions`). This session replaces each with its own LLM + ToolNode ReAct loop. The LLM can call tools during assessment to examine findings, then call tools during decision-making to review the assessment and choose actions.
+Session 5 had two stub nodes (`assess_situation` and `decide_actions`). This session replaces each with its own LLM + ToolNode ReAct loop. The LLM can call tools during assessment to examine findings, then call tools during decision-making to review the assessment and choose actions.
 
 ---
 
@@ -114,7 +182,17 @@ The LLM calls this to see all findings at once.
 def get_findings_by_cluster(cluster_id: str) -> List[Dict[str, Any]]:
     """Return findings for a specific cluster."""
     findings = [f for f in _state.findings if f["cluster_id"] == cluster_id]
-    return [...]  # same structure as get_all_findings
+    return [
+        {
+            "finding_id": f["finding_id"],
+            "cluster_id": f["cluster_id"],
+            "anomaly_type": f["anomaly_type"],
+            "affected_sensors": f["affected_sensors"],
+            "confidence": f["confidence"],
+            "summary": f["summary"],
+        }
+        for f in findings
+    ]
 ```
 
 The LLM calls this to zoom in on one cluster: "what did cluster-north report?"
@@ -252,16 +330,27 @@ def _make_assess_llm_node(
                     cluster_list=", ".join(cluster_ids),
                 )
             )
-            # Summarize findings for the LLM
-            finding_lines = [...]
+            # Summarize findings for the LLM (last 30 findings)
+            finding_lines = []
+            for f in findings[:30]:
+                finding_lines.append(
+                    f"  [{f['anomaly_type']}] cluster={f['cluster_id']} "
+                    f"conf={f['confidence']:.2f} — {f['summary'][:80]}"
+                )
             
             # Load past incidents from store
             past_lines = []
             if store is not None:
                 for cid in cluster_ids:
                     items = store.search(("incidents", cid))
-                    for item in items[-10:]:
-                        past_lines.append(...)
+                    for item in items[-10:]:  # last 10 per cluster
+                        v = item.value
+                        past_lines.append(
+                            f"  [PAST][{v.get('cluster_id', cid)}] "
+                            f"{v.get('anomaly_type', '?')} "
+                            f"conf={v.get('confidence', 0):.2f} — "
+                            f"{v.get('summary', '')[:80]}"
+                        )
             
             user_content = (
                 f"Active clusters: {', '.join(cluster_ids)}\n"
